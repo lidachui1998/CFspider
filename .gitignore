@@ -17,3 +17,8 @@ edgetunnel_proxy.py
 test.py
 test_*.py
 *.html
+
+# 镜像输出目录
+mirror/
+*_mirror/
+test_mirror_*/
