@@ -1,7 +1,8 @@
-// CFspider - Cloudflare Workers 代理 IP 池 v1.2.0
+// CFspider - Cloudflare Workers 代理 IP 池 v1.4.1
+// 支持：同步/异步请求、TLS指纹模拟、浏览器自动化
 
 let 反代IP = '';
-const VERSION = '1.2.0';
+const VERSION = '1.4.1';
 const START_TIME = Date.now();
 
 export default {
@@ -402,11 +403,11 @@ function generateCyberpunkPage(request, url, visitorIP) {
             continent: '大洲',
             featuresTitle: '功能特性',
             feature1: '全球 300+ 边缘节点',
-            feature2: '自动负载均衡',
-            feature3: '低延迟高并发',
-            feature4: 'Python 库支持',
+            feature2: 'TLS 指纹模拟',
+            feature3: '异步请求 (httpx)',
+            feature4: 'HTTP/2 支持',
             feature5: '浏览器自动化',
-            feature6: 'CORS 跨域支持',
+            feature6: '25种浏览器指纹',
             installTitle: '快速安装',
             version: '版本',
             uptime: '运行时间',
@@ -446,11 +447,11 @@ function generateCyberpunkPage(request, url, visitorIP) {
             continent: 'Continent',
             featuresTitle: 'Features',
             feature1: '300+ Global Edge Nodes',
-            feature2: 'Auto Load Balancing',
-            feature3: 'Low Latency & High Concurrency',
-            feature4: 'Python Library Support',
+            feature2: 'TLS Fingerprint Impersonate',
+            feature3: 'Async Requests (httpx)',
+            feature4: 'HTTP/2 Support',
             feature5: 'Browser Automation',
-            feature6: 'CORS Support',
+            feature6: '25 Browser Fingerprints',
             installTitle: 'Quick Install',
             version: 'Version',
             uptime: 'Uptime',
@@ -1234,26 +1235,28 @@ function generateCyberpunkPage(request, url, visitorIP) {
 
 cf_proxies = <span class="code-string">"https://your-workers.dev"</span>
 
-<span class="code-comment"># GET request</span>
+<span class="code-comment"># GET request with CF proxy</span>
 response = cfspider.<span class="code-function">get</span>(
     <span class="code-string">"https://httpbin.org/ip"</span>,
     cf_proxies=cf_proxies
 )
-<span class="code-function">print</span>(response.text)
-<span class="code-function">print</span>(response.cf_colo)  <span class="code-comment"># Cloudflare node</span>
+<span class="code-function">print</span>(response.cf_colo)  <span class="code-comment"># Cloudflare node code</span>
 
-<span class="code-comment"># POST request</span>
-response = cfspider.<span class="code-function">post</span>(
-    <span class="code-string">"https://httpbin.org/post"</span>,
-    cf_proxies=cf_proxies,
-    json={<span class="code-string">"key"</span>: <span class="code-string">"value"</span>}
+<span class="code-comment"># TLS fingerprint impersonate (curl_cffi)</span>
+response = cfspider.<span class="code-function">get</span>(
+    <span class="code-string">"https://example.com"</span>,
+    impersonate=<span class="code-string">"chrome131"</span>
 )
 
-<span class="code-comment"># Browser automation</span>
-<span class="code-keyword">from</span> cfspider <span class="code-keyword">import</span> Browser
+<span class="code-comment"># Async request (httpx)</span>
+response = <span class="code-keyword">await</span> cfspider.<span class="code-function">aget</span>(
+    <span class="code-string">"https://httpbin.org/ip"</span>,
+    cf_proxies=cf_proxies
+)
 
-browser = Browser(headless=<span class="code-keyword">True</span>)
-html = browser.<span class="code-function">get_html</span>(<span class="code-string">"https://example.com"</span>)
+<span class="code-comment"># Browser automation (Playwright)</span>
+browser = cfspider.<span class="code-function">Browser</span>()
+html = browser.<span class="code-function">html</span>(<span class="code-string">"https://example.com"</span>)
 browser.<span class="code-function">close</span>()</pre>
         </div>
         
