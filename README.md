@@ -117,6 +117,9 @@ Cloudflare Workers 免费版每日 100,000 请求，无需信用卡，无需付�
 - **支持 TLS 指纹模拟**（基于 curl_cffi），可模拟 Chrome/Safari/Firefox/Edge 浏览器指纹
 - **支持 IP 地图可视化**（基于 MapLibre GL），生成 HTML 地图文件，显示代理 IP 地理位置
 - **支持网页镜像**（基于 Playwright + BeautifulSoup），一键保存完整网页到本地，自动下载所有资源
+- **支持隐身模式**：自动添加完整浏览器请求头（Sec-Fetch-*、Accept-* 等 15+ 个头）
+- **支持会话一致性**（StealthSession）：保持 User-Agent 和 Cookie 一致，模拟真实用户
+- **支持行为模拟**：请求随机延迟、自动 Referer、多浏览器指纹轮换
 - 完全免费，Workers 免费版每日 100,000 请求
 
 ## 测试结果
@@ -133,6 +136,9 @@ Cloudflare Workers 免费版每日 100,000 请求，无需信用卡，无需付�
 | 浏览器(无代理) | OK | 本地 IP 出口 |
 | IP 地图可视化 | OK | 生成 HTML 地图文件 |
 | 网页镜像 | OK | 保存完整网页到本地 |
+| 隐身模式 | OK | 自动添加 15+ 个请求头 |
+| StealthSession | OK | 会话一致性、自动 Referer |
+| 随机延迟 | OK | 请求间随机等待 |
 
 ## 部署 Workers
 
@@ -526,6 +532,148 @@ asyncio.run(main())
 | `cfspider.apatch(url, **kwargs)` | 异步 PATCH 请求 |
 | `cfspider.astream(method, url, **kwargs)` | 流式请求（上下文管理器） |
 | `cfspider.AsyncSession(**kwargs)` | 异步会话（支持连接池） |
+
+## 隐身模式（反爬虫规避）
+
+CFspider v1.7.0 新增隐身模式，解决反爬检测中最常见的三个问题：
+
+1. **请求头不完整**：自动添加完整的浏览器请求头（15+ 个头）
+2. **会话不一致**：StealthSession 保持 User-Agent、Cookie 一致
+3. **行为模式单一**：支持随机延迟、自动 Referer、浏览器指纹轮换
+
+### 基本用法（stealth=True）
+
+```python
+import cfspider
+
+# 启用隐身模式 - 自动添加完整浏览器请求头
+response = cfspider.get(
+    "https://example.com",
+    stealth=True
+)
+print(response.text)
+
+# 自动添加的请求头包括：
+# - User-Agent (Chrome 131 完整指纹)
+# - Accept, Accept-Language, Accept-Encoding
+# - Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site, Sec-Fetch-User
+# - Sec-CH-UA, Sec-CH-UA-Mobile, Sec-CH-UA-Platform
+# - Upgrade-Insecure-Requests, Cache-Control, Connection, DNT
+```
+
+### 选择浏览器类型
+
+```python
+import cfspider
+
+# 使用 Firefox 请求头
+response = cfspider.get(
+    "https://example.com",
+    stealth=True,
+    stealth_browser='firefox'  # chrome, firefox, safari, edge, chrome_mobile
+)
+
+# 查看支持的浏览器
+print(cfspider.STEALTH_BROWSERS)
+# ['chrome', 'firefox', 'safari', 'edge', 'chrome_mobile']
+```
+
+### 随机延迟
+
+```python
+import cfspider
+
+# 每次请求前随机延迟 1-3 秒
+response = cfspider.get(
+    "https://example.com",
+    stealth=True,
+    delay=(1, 3)  # 最小 1 秒，最大 3 秒
+)
+```
+
+### StealthSession 会话一致性
+
+```python
+import cfspider
+
+# 隐身会话 - 保持 User-Agent、Cookie 一致
+with cfspider.StealthSession(
+    browser='chrome',      # 固定浏览器类型
+    delay=(0.5, 2.0),      # 请求间随机延迟
+    auto_referer=True      # 自动添加 Referer
+) as session:
+    # 第一次请求
+    r1 = session.get("https://example.com/page1")
+    
+    # 第二次请求 - 自动带上 Cookie 和 Referer
+    r2 = session.get("https://example.com/page2")
+    
+    # 查看会话状态
+    print(f"请求次数: {session.request_count}")
+    print(f"当前 Cookie: {session.get_cookies()}")
+```
+
+### 配合 Workers 代理使用
+
+```python
+import cfspider
+
+# 隐身模式 + Cloudflare IP 出口
+response = cfspider.get(
+    "https://httpbin.org/headers",
+    cf_proxies="https://your-workers.dev",
+    stealth=True
+)
+print(response.cf_colo)  # Cloudflare 节点代码
+
+# 隐身会话 + Workers 代理
+with cfspider.StealthSession(
+    cf_proxies="https://your-workers.dev",
+    browser='chrome'
+) as session:
+    r1 = session.get("https://example.com")
+    r2 = session.get("https://example.com/api")
+```
+
+### 配合 TLS 指纹模拟
+
+```python
+import cfspider
+
+# 隐身模式 + TLS 指纹模拟（终极反爬方案）
+response = cfspider.get(
+    "https://example.com",
+    stealth=True,
+    impersonate='chrome131'  # 模拟 Chrome 131 的 TLS 指纹
+)
+# 同时具备：完整请求头 + 真实 TLS 指纹
+```
+
+### 手动获取请求头
+
+```python
+import cfspider
+
+# 获取指定浏览器的请求头模板
+chrome_headers = cfspider.get_stealth_headers('chrome')
+firefox_headers = cfspider.get_stealth_headers('firefox')
+
+# 获取随机浏览器的请求头
+random_headers = cfspider.get_random_browser_headers()
+
+# 使用预定义的请求头常量
+from cfspider import CHROME_HEADERS, FIREFOX_HEADERS, SAFARI_HEADERS
+```
+
+### 支持的浏览器请求头
+
+| 浏览器 | 参数值 | 请求头数量 | 特点 |
+|--------|--------|------------|------|
+| Chrome 131 | `chrome` | 15 | 包含完整 Sec-CH-UA 客户端提示 |
+| Firefox 133 | `firefox` | 12 | 包含 Sec-GPC 隐私头 |
+| Safari 18 | `safari` | 5 | 简洁的 macOS Safari 指纹 |
+| Edge 131 | `edge` | 14 | 基于 Chromium 的 Edge |
+| Chrome Mobile | `chrome_mobile` | 10 | Android Pixel 设备指纹 |
 
 ## TLS 指纹模拟 (curl_cffi)
 

@@ -2,7 +2,7 @@
 // 支持：同步/异步请求、TLS指纹模拟、浏览器自动化
 
 let 反代IP = '';
-const VERSION = '1.6.0';
+const VERSION = '1.7.0';
 const START_TIME = Date.now();
 
 export default {
@@ -404,10 +404,10 @@ function generateCyberpunkPage(request, url, visitorIP) {
             featuresTitle: '功能特性',
             feature1: '全球 300+ 边缘节点',
             feature2: 'TLS 指纹模拟',
-            feature3: '异步请求 (httpx)',
+            feature3: '隐身模式',
             feature4: 'HTTP/2 支持',
             feature5: '浏览器自动化',
-            feature6: '25种浏览器指纹',
+            feature6: '会话一致性',
             installTitle: '快速安装',
             version: '版本',
             uptime: '运行时间',
@@ -448,10 +448,10 @@ function generateCyberpunkPage(request, url, visitorIP) {
             featuresTitle: 'Features',
             feature1: '300+ Global Edge Nodes',
             feature2: 'TLS Fingerprint Impersonate',
-            feature3: 'Async Requests (httpx)',
+            feature3: 'Stealth Mode',
             feature4: 'HTTP/2 Support',
             feature5: 'Browser Automation',
-            feature6: '25 Browser Fingerprints',
+            feature6: 'Session Consistency',
             installTitle: 'Quick Install',
             version: 'Version',
             uptime: 'Uptime',
