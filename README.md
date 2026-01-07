@@ -1398,7 +1398,7 @@ Apache License 2.0
 
 - GitHub: https://github.com/violettoolssite/CFspider
 - PyPI: https://pypi.org/project/cfspider/
-- 官网: https://spider.violetteam.cloud
+- 官网: https://cfspider.com
 - B 站视频教程: https://b23.tv/1uzOf7M
 - YouTube 视频教程: https://youtu.be/oPeXiIFJ9TA?si=ukXsX8iP86ZTB4LP
 - edgetunnel: https://github.com/cmliu/edgetunnel
