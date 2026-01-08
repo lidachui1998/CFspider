@@ -19,3 +19,10 @@ test_*.py
 mirror/
 *_mirror/
 test_mirror_*/
+
+#混淆脚本
+obfuscate_pages.py
+obfuscate_config.json
+
+#示例文件
+examples/

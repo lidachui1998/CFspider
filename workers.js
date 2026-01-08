@@ -1,8 +1,8 @@
-// CFspider - Cloudflare Workers 代理 IP 池 v1.7.3
+// CFspider - Cloudflare Workers 代理 IP 池 v1.8.0
 // 支持：同步/异步请求、TLS指纹模拟、浏览器自动化
 
 let 反代IP = '';
-const VERSION = '1.7.3';
+const VERSION = '1.8.0';
 const START_TIME = Date.now();
 
 export default {
@@ -31,8 +31,12 @@ export default {
             return new Response(null, { headers: corsHeaders });
         }
         
-        // Token 验证（除了首页和 debug 页面）
-        if (path !== '' && path !== '/' && path !== 'debug') {
+        // Token 验证（除了首页、debug 页面和从首页发起的 API 请求）
+        const referer = request.headers.get('Referer') || '';
+        const isFromHomePage = referer && (referer.endsWith('/') || referer.endsWith(url.hostname + '/') || referer.includes(url.hostname + '/?'));
+        const isPublicApi = (path === 'api/pool' || path === 'api/proxyip') && isFromHomePage;
+        
+        if (path !== '' && path !== '/' && path !== 'debug' && !isPublicApi) {
             const tokenValidation = validateToken(request, env);
             if (!tokenValidation.valid) {
                 return new Response(JSON.stringify({
@@ -1247,7 +1251,7 @@ function generateCyberpunkPage(request, url, visitorIP) {
         </div>
         
         <div class="code-section">
-            <pre><span class="code-comment"># pip install cfspider</span>
+            <pre><span class="code-comment"># pip install cfspider[extract]</span>
 <span class="code-keyword">import</span> cfspider
 
 cf_proxies = <span class="code-string">"https://your-workers.dev"</span>
@@ -1259,11 +1263,23 @@ response = cfspider.<span class="code-function">get</span>(
 )
 <span class="code-function">print</span>(response.cf_colo)  <span class="code-comment"># Cloudflare node code</span>
 
-<span class="code-comment"># TLS fingerprint impersonate (curl_cffi)</span>
+<span class="code-comment"># TLS fingerprint + stealth mode</span>
 response = cfspider.<span class="code-function">get</span>(
     <span class="code-string">"https://example.com"</span>,
-    impersonate=<span class="code-string">"chrome131"</span>
+    impersonate=<span class="code-string">"chrome131"</span>,
+    stealth=<span class="code-keyword">True</span>
 )
+
+<span class="code-comment"># Data extraction (CSS/XPath/JSONPath)</span>
+title = response.<span class="code-function">find</span>(<span class="code-string">"h1"</span>)
+links = response.<span class="code-function">find_all</span>(<span class="code-string">"a"</span>, attr=<span class="code-string">"href"</span>)
+data = response.<span class="code-function">pick</span>(title=<span class="code-string">"h1"</span>, links=(<span class="code-string">"a"</span>, <span class="code-string">"href"</span>))
+data.<span class="code-function">save</span>(<span class="code-string">"output.csv"</span>)
+
+<span class="code-comment"># Batch requests with progress</span>
+urls = [<span class="code-string">"https://example.com/1"</span>, <span class="code-string">"https://example.com/2"</span>]
+results = cfspider.<span class="code-function">batch</span>(urls, concurrency=<span class="code-number">10</span>)
+results.<span class="code-function">save</span>(<span class="code-string">"results.json"</span>)
 
 <span class="code-comment"># Async request (httpx)</span>
 response = <span class="code-keyword">await</span> cfspider.<span class="code-function">aget</span>(
@@ -1293,7 +1309,11 @@ browser.<span class="code-function">close</span>()</pre>
         
         async function loadPool() {
             try {
-                const resp = await fetch('/api/pool');
+                // 从 URL 参数获取 token
+                const urlParams = new URLSearchParams(window.location.search);
+                const token = urlParams.get('token');
+                const apiUrl = token ? \`/api/pool?token=\${token}\` : '/api/pool';
+                const resp = await fetch(apiUrl);
                 const data = await resp.json();
                 const tbody = document.getElementById('poolBody');
                 
