@@ -6,7 +6,7 @@
 
 **v1.8.2** - 基于 VLESS 协议的免费代理 IP 池，利用 Cloudflare 全球 300+ 边缘节点作为出口，**完全隐藏 CF 特征**，支持隐身模式、TLS 指纹模拟、网页镜像和浏览器自动化。
 
-## 📱 支持 v2ray/Xray 客户端
+## 支持 v2ray/Xray 客户端
 
 > **CFspider Workers 支持标准 VLESS 协议**，可直接在 v2ray/Xray 客户端中使用！
 
@@ -31,29 +31,29 @@
 vless://你的UUID@your-workers.dev:443?encryption=none&security=tls&type=ws&host=your-workers.dev&path=%2F你的UUID#CFspider
 ```
 
-## 🚀 v1.8.2 新特性
+## v1.8.2 新特性
 
 | 特性 | 说明 |
 |------|------|
-| **🔐 VLESS 协议** | 使用 VLESS 协议代理，完全隐藏 CF-Ray、CF-Worker 等 Cloudflare 头 |
-| **📱 v2ray 支持** | 支持 v2rayN/v2rayNG/Clash 等客户端直接使用 |
-| **🌐 动态 IP 池** | 每次请求自动获取新的出口 IP，从 300+ 全球节点选择 |
-| **🔑 UUID 安全** | 支持自定义 UUID，配置后需手动填写，默认 UUID 界面显示警告 |
-| **📝 简化 API** | 只需填写 Workers 地址，自动获取配置 |
-| **💻 动态代码示例** | Workers 界面根据 UUID 配置显示正确的 Python 代码 |
+| **VLESS 协议** | 使用 VLESS 协议代理，完全隐藏 CF-Ray、CF-Worker 等 Cloudflare 头 |
+| **v2ray 支持** | 支持 v2rayN/v2rayNG/Clash 等客户端直接使用 |
+| **动态 IP 池** | 每次请求自动获取新的出口 IP，从 300+ 全球节点选择 |
+| **UUID 安全** | 支持自定义 UUID，配置后需手动填写，默认 UUID 界面显示警告 |
+| **简化 API** | 只需填写 Workers 地址，自动获取配置 |
+| **动态代码示例** | Workers 界面根据 UUID 配置显示正确的 Python 代码 |
 
-## ⚡ 核心优势：VLESS 动态 IP 池
+## 核心优势：VLESS 动态 IP 池
 
 > **CFspider v1.8.2 采用 VLESS 协议**，每次请求自动获取新的出口 IP，自动从 300+ 全球节点中选择最优节点。**完全隐藏 Cloudflare 特征**（无 CF-Ray、CF-Worker、Cf-Connecting-Ip 等头），实现真正的匿名代理。
 
-### 🎯 动态 IP 池的优势
+### 动态 IP 池的优势
 
 | 优势 | 说明 |
 |------|------|
-| **🛡️ 降低封禁风险** | IP 分散在 300+ 节点，单个 IP 被封不影响整体使用 |
-| **📈 提高成功率** | 自动选择最优节点，减少网络问题和连接失败 |
-| **🌍 地理分布** | 模拟真实用户的地理分布，请求更自然 |
-| **⚙️ 自动优化** | 根据目标网站位置和网络状况自动选择节点 |
+| **降低封禁风险** | IP 分散在 300+ 节点，单个 IP 被封不影响整体使用 |
+| **提高成功率** | 自动选择最优节点，减少网络问题和连接失败 |
+| **地理分布** | 模拟真实用户的地理分布，请求更自然 |
+| **自动优化** | 根据目标网站位置和网络状况自动选择节点 |
 
 **与静态 IP 代理对比：**
 
@@ -67,7 +67,7 @@ print(response.json()['origin'])  # 每次都是不同的出口 IP
 # 完全隐藏 CF 特征，目标网站无法检测到使用了 Cloudflare
 ```
 
-## 📸 项目截图
+## 项目截图
 
 ### 官网首页
 
@@ -100,7 +100,7 @@ print(response.json()['origin'])  # 每次都是不同的出口 IP
 
 > 8 行代码完成爬虫示例：请求、提取、保存一步到位
 
-> ⚠️ **重要声明**：本项目仅供学习研究、网络安全测试、合规数据采集等**合法用途**。使用者须遵守所在地法律法规及 Cloudflare 服务条款。**任何非法使用（包括但不限于网络攻击、侵犯隐私、规避版权保护等）均与本项目开发者无关，使用者自行承担全部法律责任。**
+> **重要声明**：本项目仅供学习研究、网络安全测试、合规数据采集等**合法用途**。使用者须遵守所在地法律法规及 Cloudflare 服务条款。**任何非法使用（包括但不限于网络攻击、侵犯隐私、规避版权保护等）均与本项目开发者无关，使用者自行承担全部法律责任。**
 
 ## 代理方案对比
 
@@ -257,14 +257,14 @@ Cloudflare Workers 免费版每日 100,000 请求，无需信用卡，无需付�
 
 | 对比项 | 旧方案 (HTTP 代理) | 新方案 (VLESS v1.8.2+) |
 |--------|-------------------|------------------------|
-| CF 特征暴露 | ❌ 暴露 CF-Ray, CF-Worker 等 | ✅ 完全隐藏 |
-| IPv6 问题 | ❌ IPv6 固定不变 | ✅ 每次请求新 IP |
-| 匿名性 | ⚠️ 中等 | ✅ 高 |
-| 检测风险 | ⚠️ 容易被识别 | ✅ 难以检测 |
+| CF 特征暴露 | 暴露 CF-Ray, CF-Worker 等 | 完全隐藏 |
+| IPv6 问题 | IPv6 固定不变 | 每次请求新 IP |
+| 匿名性 | 中等 | 高 |
+| 检测风险 | 容易被识别 | 难以检测 |
 
 ## 特性
 
-### 🔐 核心特性 (v1.8.2+)
+### 核心特性 (v1.8.2+)
 
 - **VLESS 协议代理**：通过 VLESS 协议连接 Workers，完全隐藏 Cloudflare 特征
 - **动态 IP 池**：每次请求自动获取新的出口 IP，从 300+ 全球节点自动选择
@@ -272,7 +272,7 @@ Cloudflare Workers 免费版每日 100,000 请求，无需信用卡，无需付�
 - **UUID 安全机制**：支持自定义 UUID，配置后 API 不公开返回，需手动填写
 - **简化 API**：只需填写 Workers 地址，自动从 `/api/config` 获取配置
 
-### 📦 完整功能
+### 完整功能
 
 - 使用 Cloudflare 全球 300+ 边缘节点 IP
 - 与 requests 库语法一致，无学习成本
@@ -296,22 +296,22 @@ Cloudflare Workers 免费版每日 100,000 请求，无需信用卡，无需付�
 
 | 功能 | 状态 | 说明 |
 |------|------|------|
-| **VLESS 动态 IP** | ✅ OK | 每次请求新 IP（IPv4 + IPv6） |
-| **CF 特征隐藏** | ✅ OK | 无 CF-Ray、CF-Worker 等头 |
-| **UUID 安全** | ✅ OK | 自定义 UUID 不公开返回 |
-| HTTP GET 请求 | ✅ OK | 返回 Cloudflare IP |
-| HTTP POST 请求 | ✅ OK | 发送数据成功 |
-| 自定义 Headers | ✅ OK | Header 正确传递 |
-| Session 会话 | ✅ OK | 多次请求正常 |
-| Workers Debug | ✅ OK | 返回 CF 机房信息 |
-| 浏览器(VLESS) | ✅ OK | Cloudflare IP 出口 |
-| 浏览器(HTTP代理) | ✅ OK | 支持本地/远程代理 |
-| 浏览器(无代理) | ✅ OK | 本地 IP 出口 |
-| IP 地图可视化 | ✅ OK | 生成 HTML 地图文件 |
-| 网页镜像 | ✅ OK | 保存完整网页到本地 |
-| 隐身模式 | ✅ OK | 自动添加 15+ 个请求头 |
-| StealthSession | ✅ OK | 会话一致性、自动 Referer |
-| 随机延迟 | ✅ OK | 请求间随机等待 |
+| **VLESS 动态 IP** | OK | 每次请求新 IP（IPv4 + IPv6） |
+| **CF 特征隐藏** | OK | 无 CF-Ray、CF-Worker 等头 |
+| **UUID 安全** | OK | 自定义 UUID 不公开返回 |
+| HTTP GET 请求 | OK | 返回 Cloudflare IP |
+| HTTP POST 请求 | OK | 发送数据成功 |
+| 自定义 Headers | OK | Header 正确传递 |
+| Session 会话 | OK | 多次请求正常 |
+| Workers Debug | OK | 返回 CF 机房信息 |
+| 浏览器(VLESS) | OK | Cloudflare IP 出口 |
+| 浏览器(HTTP代理) | OK | 支持本地/远程代理 |
+| 浏览器(无代理) | OK | 本地 IP 出口 |
+| IP 地图可视化 | OK | 生成 HTML 地图文件 |
+| 网页镜像 | OK | 保存完整网页到本地 |
+| 隐身模式 | OK | 自动添加 15+ 个请求头 |
+| StealthSession | OK | 会话一致性、自动 Referer |
+| 随机延迟 | OK | 请求间随机等待 |
 
 ## 部署 Workers
 
@@ -319,7 +319,7 @@ Cloudflare Workers 免费版每日 100,000 请求，无需信用卡，无需付�
 ![GitHub forks](https://img.shields.io/github/forks/violettoolssite/CFspider?style=social)
 ![GitHub watchers](https://img.shields.io/github/watchers/violettoolssite/CFspider?style=social)
 
-### ⭐ Stars 增长趋势
+### Stars 增长趋势
 
 ![Star History Chart](https://api.star-history.com/svg?repos=violettoolssite/CFspider&type=Date)
 
@@ -1636,7 +1636,16 @@ edgetunnel 是一个优秀的 Cloudflare Workers VLESS 代理实现，感谢 [@c
 
 - edgetunnel 仓库：https://github.com/cmliu/edgetunnel
 
-## ⚖️ 法律声明与免责条款
+## 贡献者
+
+感谢所有为本项目做出贡献的开发者：
+
+- [@cmliu](https://github.com/cmliu) - edgetunnel VLESS 协议实现
+- Claude (Anthropic) - v1.8.2 代码重构与 VLESS 集成
+
+欢迎通过 Pull Request 或 Issue 参与贡献！
+
+## 法律声明与免责条款
 
 ### 项目定位
 
@@ -1647,31 +1656,31 @@ CFspider 是一个**技术研究项目**，旨在探索 Cloudflare Workers 边�
 - 合规数据采集开发者
 - 技术爱好者
 
-### ✅ 合规使用场景
+### 合规使用场景
 
 | 场景 | 描述 | 合规性 |
 |------|------|--------|
-| **学术研究** | 研究分布式系统、边缘计算、网络架构 | ✅ 合规 |
-| **安全测试** | 对自有或授权系统进行渗透测试 | ✅ 合规 |
-| **公开数据采集** | 采集无需登录的公开信息（遵守 robots.txt） | ✅ 合规 |
-| **API 开发测试** | 测试自己开发的 API 服务 | ✅ 合规 |
-| **网络诊断** | 检测网络连通性、延迟、路由 | ✅ 合规 |
-| **隐私保护** | 在合法范围内保护个人网络隐私 | ✅ 合规 |
+| **学术研究** | 研究分布式系统、边缘计算、网络架构 | 合规 |
+| **安全测试** | 对自有或授权系统进行渗透测试 | 合规 |
+| **公开数据采集** | 采集无需登录的公开信息（遵守 robots.txt） | 合规 |
+| **API 开发测试** | 测试自己开发的 API 服务 | 合规 |
+| **网络诊断** | 检测网络连通性、延迟、路由 | 合规 |
+| **隐私保护** | 在合法范围内保护个人网络隐私 | 合规 |
 
-### ❌ 禁止用途
+### 禁止用途
 
 **以下行为严格禁止，使用者须自行承担全部法律责任：**
 
 | 禁止行为 | 法律风险 |
 |----------|----------|
-| 🚫 DDoS 攻击或任何形式的网络攻击 | 刑事犯罪 |
-| 🚫 未授权访问计算机系统 | 刑事犯罪 |
-| 🚫 侵犯版权（绕过付费墙、下载盗版内容） | 民事/刑事责任 |
-| 🚫 侵犯隐私（爬取个人隐私数据） | 民事/刑事责任 |
-| 🚫 网络诈骗、钓鱼攻击 | 刑事犯罪 |
-| 🚫 规避制裁或出口管制 | 刑事犯罪 |
-| 🚫 恶意竞争（大规模爬取竞争对手数据） | 不正当竞争 |
-| 🚫 违反目标网站 Terms of Service | 民事责任 |
+| DDoS 攻击或任何形式的网络攻击 | 刑事犯罪 |
+| 未授权访问计算机系统 | 刑事犯罪 |
+| 侵犯版权（绕过付费墙、下载盗版内容） | 民事/刑事责任 |
+| 侵犯隐私（爬取个人隐私数据） | 民事/刑事责任 |
+| 网络诈骗、钓鱼攻击 | 刑事犯罪 |
+| 规避制裁或出口管制 | 刑事犯罪 |
+| 恶意竞争（大规模爬取竞争对手数据） | 不正当竞争 |
+| 违反目标网站 Terms of Service | 民事责任 |
 
 ### 免责声明
 
