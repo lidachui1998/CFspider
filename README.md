@@ -4,7 +4,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/cfspider)](https://pypi.org/project/cfspider/)
 [![License](https://img.shields.io/github/license/violettoolssite/CFspider)](LICENSE)
 
-**v1.8.4** - 基于 VLESS 协议的免费代理 IP 池，利用 Cloudflare 全球 300+ 边缘节点作为出口，**完全隐藏 CF 特征**，支持隐身模式、TLS 指纹模拟、网页镜像和浏览器自动化。
+**v1.8.5** - 基于 VLESS 协议的免费代理 IP 池，利用 Cloudflare 全球 300+ 边缘节点作为出口，**完全隐藏 CF 特征**，支持隐身模式、TLS 指纹模拟、网页镜像和浏览器自动化。
 
 ---
 
@@ -755,6 +755,56 @@ cfspider.patch(url, cf_proxies=cf_proxies, json=data)
 | headers | dict | 请求头 |
 | cookies | dict | Cookies |
 | timeout | int/float | 超时时间（秒） |
+| proxies | dict | 普通 HTTP/SOCKS5 代理（与 requests 兼容） |
+| two_proxy | str | 双层代理配置（格式：host:port:user:pass） |
+
+### 代理参数对比
+
+CFspider 支持三种代理方式，适用于不同场景：
+
+| 参数 | 用途 | 格式示例 |
+|------|------|----------|
+| `cf_proxies` | CFspider Workers (VLESS 协议) | `"https://your-workers.dev"` |
+| `proxies` | 普通 HTTP/SOCKS5 代理 | `{"http": "http://ip:port", "https": "..."}` |
+| `two_proxy` | 双层代理（通过 Workers 转发） | `"host:port:user:pass"` |
+
+**使用场景：**
+
+| 场景 | 推荐方案 |
+|------|---------|
+| 需要免费代理 IP 池 | `cf_proxies` - 使用 Cloudflare WARP 出口 |
+| 已有海外代理，可直连 | `proxies` - 直接使用普通代理 |
+| 已有海外代理，国内无法直连 | `cf_proxies` + `two_proxy` - 通过 Workers 中转 |
+
+**代码示例：**
+
+```python
+import cfspider
+
+# 方式 1: 使用 CFspider Workers（VLESS 协议，免费 IP 池）
+response = cfspider.get(
+    "https://httpbin.org/ip",
+    cf_proxies="https://your-workers.dev",
+    uuid="your-uuid"
+)
+
+# 方式 2: 使用普通 HTTP/SOCKS5 代理（与 requests 兼容）
+response = cfspider.get(
+    "https://httpbin.org/ip",
+    proxies={
+        "http": "http://user:pass@proxy.example.com:8080",
+        "https": "http://user:pass@proxy.example.com:8080"
+    }
+)
+
+# 方式 3: 双层代理（国内无法直连海外代理时使用）
+response = cfspider.get(
+    "https://httpbin.org/ip",
+    cf_proxies="https://your-workers.dev",
+    uuid="your-uuid",
+    two_proxy="us.cliproxy.io:3010:username:password"
+)
+```
 
 ### 响应对象
 

@@ -1,8 +1,11 @@
 import cfspider
 
-res = cfspider.get(
+# 直接使用海外代理
+response = cfspider.get(
     "https://httpbin.org/ip",
-    cf_proxies="https://ip.kami666.xyz",
-    uuid="c373c80c-58e4-4e64-8db5-40096905ec58",
+    proxies={
+        "http": "http://us.cliproxy.io:3010",
+        "https": "http://2e75108689-region-JP:nf9ssu7a@us.cliproxy.io:3010"
+    }
 )
-print(res.text)
+print(response.json())
