@@ -6,6 +6,14 @@
 
 **v1.8.3** - 基于 VLESS 协议的免费代理 IP 池，利用 Cloudflare 全球 300+ 边缘节点作为出口，**完全隐藏 CF 特征**，支持隐身模式、TLS 指纹模拟、网页镜像和浏览器自动化。
 
+---
+
+### 致谢
+
+本项目的 VLESS 协议实现借鉴了 [edgetunnel](https://github.com/cmliu/edgetunnel) 项目，感谢 [@cmliu](https://github.com/cmliu) 的开源贡献。
+
+---
+
 ## 支持 v2ray/Xray 客户端
 
 > **CFspider Workers 支持标准 VLESS 协议**，可直接在 v2ray/Xray 客户端中使用！
