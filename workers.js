@@ -2373,7 +2373,11 @@ function generateCFspiderPage(request, url, visitorIP, userID, newIpEnabled = tr
             twoProxyDesc: '流量路径: 本地 → Workers (VLESS) → 第二层代理 → 目标网站',
             twoProxyEnvHint: '可选功能：如需指定出口 IP 地区或国内无法直连代理时使用',
             twoProxyHowTo: '如需启用，请在 Cloudflare Dashboard 设置环境变量：',
-            exitIp: '出口 IP'
+            exitIp: '出口 IP',
+            proxyipTitle: 'ProxyIP 配置',
+            proxyipAdvanced: '高级',
+            proxyipCurrent: '当前 ProxyIP',
+            proxyipHint: 'ProxyIP 用于反代连接。如需自定义，请在 Cloudflare 环境变量中设置 PROXYIP。'
         },
         en: {
             subtitle: 'Cloudflare VLESS Proxy Network',
@@ -2402,7 +2406,11 @@ function generateCFspiderPage(request, url, visitorIP, userID, newIpEnabled = tr
             twoProxyDesc: 'Traffic: Local → Workers (VLESS) → Second Proxy → Target',
             twoProxyEnvHint: 'Optional: Use when you need specific exit IP region or cannot connect proxy directly',
             twoProxyHowTo: 'To enable, set environment variable in Cloudflare Dashboard:',
-            exitIp: 'Exit IP'
+            exitIp: 'Exit IP',
+            proxyipTitle: 'ProxyIP Configuration',
+            proxyipAdvanced: 'Advanced',
+            proxyipCurrent: 'Current ProxyIP',
+            proxyipHint: 'ProxyIP is used for reverse proxy. To customize, set PROXYIP environment variable in Cloudflare.'
         }
     };
     
@@ -2992,26 +3000,20 @@ function generateCFspiderPage(request, url, visitorIP, userID, newIpEnabled = tr
         </div>
         
         <!-- ProxyIP Configuration Section -->
-        <div class="proxyip-section" style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 16px; padding: 24px; margin-bottom: 32px;">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+        <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 16px; padding: 24px; margin-bottom: 32px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
                 <div style="font-family: 'Orbitron', sans-serif; font-size: 1.2rem; color: var(--accent-cyan); display: flex; align-items: center; gap: 10px;">
-                    <span>ProxyIP 配置</span>
-                    <span class="config-mode-badge page" style="font-size: 0.65rem;">高级</span>
+                    <span>${t.proxyipTitle}</span>
+                    <span class="config-mode-badge page" style="font-size: 0.65rem;">${t.proxyipAdvanced}</span>
                 </div>
-                ${!hasEnvUUID ? `
-                <div style="display: flex; gap: 8px;">
-                    <button class="action-btn" onclick="showProxyIPModal()">配置</button>
-                    <button class="action-btn danger" onclick="deleteProxyIP()">重置</button>
-                </div>
-                ` : ``}
             </div>
             <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px;">
                 <div class="config-item">
-                    <span class="config-label">当前 ProxyIP</span>
-                    <span class="config-value" id="proxyipDisplay" style="color: var(--accent-cyan);">${反代IP}</span>
+                    <span class="config-label">${t.proxyipCurrent}</span>
+                    <span class="config-value" style="color: var(--accent-cyan); font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;">${colo.toLowerCase()}.proxyip.cmliussss.net</span>
                 </div>
                 <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color);">
-                    💡 ProxyIP 用于反代连接，默认为自动模式 (动态选择)。如需指定，请在 Cloudflare 环境变量中设置 PROXYIP。
+                    ${t.proxyipHint}
                 </div>
             </div>
         </div>
@@ -3140,40 +3142,18 @@ response = cfspider.<span class="code-function">get</span>(
         </div>
     </div>
     
-    <!-- ProxyIP Modal -->
-    <div class="modal" id="proxyipModal">
-        <div class="modal-content">
-            <div class="modal-title">配置 ProxyIP</div>
-            <div class="modal-subtitle">自定义反代 IP 地址，留空使用自动模式</div>
-            <input type="text" class="modal-input" id="proxyipInput" placeholder="格式: domain:port 或 IP:port">
-            <div class="modal-hint">示例: proxyip.example.com:443 或留空使用默认 (${反代IP})</div>
-            <div class="modal-warning" style="background: rgba(88,166,255,0.1); border-color: var(--accent-cyan);">
-                💡 此处配置仅作显示参考。要实际使用，请在 Cloudflare Dashboard → Workers → Settings → Variables 添加环境变量: PROXYIP = your_proxyip:port
-            </div>
-            <div class="modal-buttons">
-                <button class="modal-btn modal-btn-secondary" onclick="closeProxyIPModal()">取消</button>
-                <button class="modal-btn modal-btn-primary" onclick="saveProxyIP()">确认</button>
-            </div>
-        </div>
-    </div>
-    
     <script>
         const HOST = '${vlessHost}';
         const ENV_UUID = ${hasEnvUUID ? `'${userID}'` : 'null'};
         const ENV_TWO_PROXY = ${twoProxyEnabled ? `'${twoProxy}'` : 'null'};
-        const ENV_PROXYIP = '${反代IP}';
         const STORAGE_KEY = 'cfspider_config_' + HOST;
         
         // 配置管理
         function loadConfig() {
-            if (ENV_UUID) return { uuid: ENV_UUID, uuidViewed: true, twoProxy: ENV_TWO_PROXY || '', proxyip: '' };
+            if (ENV_UUID) return { uuid: ENV_UUID, uuidViewed: true, twoProxy: ENV_TWO_PROXY || '' };
             const saved = localStorage.getItem(STORAGE_KEY);
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                if (!parsed.proxyip) parsed.proxyip = '';
-                return parsed;
-            }
-            const config = { uuid: crypto.randomUUID(), uuidViewed: false, twoProxy: '', proxyip: '' };
+            if (saved) return JSON.parse(saved);
+            const config = { uuid: crypto.randomUUID(), uuidViewed: false, twoProxy: '' };
             saveConfig(config);
             return config;
         }
@@ -3197,24 +3177,12 @@ response = cfspider.<span class="code-function">get</span>(
             return '****';
         }
         
-        function maskProxyIP(ip) {
-            if (!ip) return '自动（动态反代）';
-            if (ip.includes('.')) {
-                const parts = ip.split('.');
-                if (parts.length >= 2) {
-                    return parts[0] + '.' + parts[1].substring(0, 2) + '****';
-                }
-            }
-            return ip.substring(0, 8) + '****';
-        }
-        
         function updateDisplay() {
             if (ENV_UUID) return; // 环境变量模式不需要更新
             
             const uuidDisplay = document.getElementById('uuidDisplay');
             const vlessStatus = document.getElementById('vlessStatus');
             const proxyDisplay = document.getElementById('proxyDisplay');
-            const proxyipDisplay = document.getElementById('proxyipDisplay');
             
             if (uuidDisplay) {
                 if (config.uuidViewed) {
@@ -3232,10 +3200,6 @@ response = cfspider.<span class="code-function">get</span>(
             
             if (proxyDisplay) {
                 proxyDisplay.textContent = maskProxy(config.twoProxy);
-            }
-            
-            if (proxyipDisplay) {
-                proxyipDisplay.textContent = maskProxyIP(config.proxyip);
             }
             
             updateCodeExamples();
@@ -3306,34 +3270,6 @@ response = cfspider.<span class="code-function">get</span>(
         function deleteProxy() {
             if (!confirm('确定删除双层代理配置？')) return;
             config.twoProxy = '';
-            saveConfig(config);
-            updateDisplay();
-        }
-        
-        // ProxyIP 操作
-        function showProxyIPModal() {
-            document.getElementById('proxyipInput').value = config.proxyip;
-            document.getElementById('proxyipModal').classList.add('show');
-        }
-        
-        function closeProxyIPModal() {
-            document.getElementById('proxyipModal').classList.remove('show');
-        }
-        
-        function saveProxyIP() {
-            const value = document.getElementById('proxyipInput').value.trim();
-            config.proxyip = value;
-            saveConfig(config);
-            closeProxyIPModal();
-            updateDisplay();
-            if (value) {
-                alert('ProxyIP 已配置为: ' + value + '\\n\\n注意: 此配置仅影响页面显示。要实际使用自定义 ProxyIP，请在 Cloudflare Dashboard 中设置 PROXYIP 环境变量。');
-            }
-        }
-        
-        function deleteProxyIP() {
-            if (!confirm('确定重置 ProxyIP 为自动模式？')) return;
-            config.proxyip = '';
             saveConfig(config);
             updateDisplay();
         }
