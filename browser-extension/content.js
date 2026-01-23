@@ -133,6 +133,7 @@
   function processCloneUrl() {
     if (!config.enabled || !config.cloneAccel || !config.workersUrl) return;
     
+    // 更广泛的选择器，匹配 GitHub 的各种 clone 输入框
     const selectors = [
       'input[readonly]',
       'input[data-autoselect]',
@@ -140,15 +141,21 @@
       'input[aria-label*="clone"]',
       'input[aria-label*="Clone"]',
       '.input-group input',
-      '[data-target="get-repo-modal.cloneInput"]'
+      '[data-target="get-repo-modal.cloneInput"]',
+      // GitHub 新版 UI 选择器
+      '[class*="CloneContainer"] input',
+      '[class*="clone"] input[readonly]',
+      'div[class*="LocalTab"] input'
     ];
     
     let cloneInputs = [];
     selectors.forEach(sel => {
-      const inputs = document.querySelectorAll(sel);
-      inputs.forEach(i => {
-        if (!cloneInputs.includes(i)) cloneInputs.push(i);
-      });
+      try {
+        const inputs = document.querySelectorAll(sel);
+        inputs.forEach(i => {
+          if (!cloneInputs.includes(i)) cloneInputs.push(i);
+        });
+      } catch(e) {}
     });
     
     cloneInputs.forEach(input => {
@@ -163,7 +170,17 @@
       const acceleratedUrl = generateAcceleratedCloneUrl(originalUrl);
       if (!acceleratedUrl) return;
       
-      const inputGroup = input.closest('.input-group') || input.parentElement;
+      // 找到合适的容器（向上查找最多5层）
+      let inputGroup = input.parentElement;
+      for (let i = 0; i < 5 && inputGroup; i++) {
+        if (inputGroup.classList.contains('d-flex') || 
+            inputGroup.className.includes('CloneContainer') ||
+            inputGroup.querySelector('button')) {
+          break;
+        }
+        inputGroup = inputGroup.parentElement;
+      }
+      if (!inputGroup) inputGroup = input.parentElement;
       
       // 创建加速按钮
       const accelBtn = document.createElement('button');
@@ -196,57 +213,106 @@
         input.select();
       });
       
+      // 插入加速按钮 - 放在 input 后面
       input.insertAdjacentElement('afterend', accelBtn);
       
-      // 拦截容器内所有按钮的点击（可能是复制按钮）
+      // 拦截容器内所有可能的复制按钮
       interceptCopyButtons(inputGroup, input);
     });
   }
   
-  // 拦截复制按钮
+  // 拦截复制按钮 - 改进版
   function interceptCopyButtons(container, input) {
+    // 向上查找更大范围的容器
     let searchContainer = container;
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 5; i++) {
       if (searchContainer.parentElement) {
         searchContainer = searchContainer.parentElement;
       }
     }
     
-    const buttons = searchContainer.querySelectorAll('button, [role="button"]');
+    // 查找所有可能是复制按钮的元素
+    const potentialButtons = searchContainer.querySelectorAll('button, [role="button"], clipboard-copy, [data-action*="copy"]');
     
-    buttons.forEach(btn => {
-      const ariaLabel = btn.getAttribute('aria-label') || '';
-      const title = btn.getAttribute('title') || '';
-      const text = btn.textContent || '';
+    potentialButtons.forEach(btn => {
+      // 跳过已经处理过的
+      if (btn._cfspiderIntercepted) return;
       
-      if (ariaLabel.toLowerCase().includes('copy') || 
-          title.toLowerCase().includes('copy') ||
-          text.toLowerCase().includes('copy') ||
-          btn.querySelector('svg.octicon-copy')) {
-        
-        btn.addEventListener('click', (e) => {
-          const state = input._cfspiderState;
-          if (state && state.isAccelerated) {
-            e.stopImmediatePropagation();
-            e.preventDefault();
-            
-            navigator.clipboard.writeText(state.accelerated).then(() => {
-              showCopySuccess(btn);
-            });
-            
-            return false;
-          }
-        }, true);
+      const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+      const title = (btn.getAttribute('title') || '').toLowerCase();
+      const text = (btn.textContent || '').toLowerCase();
+      const dataAction = (btn.getAttribute('data-action') || '').toLowerCase();
+      
+      // 判断是否是复制按钮
+      const isCopyButton = 
+        ariaLabel.includes('copy') || 
+        title.includes('copy') ||
+        text.includes('copy') ||
+        dataAction.includes('copy') ||
+        btn.tagName.toLowerCase() === 'clipboard-copy' ||
+        btn.querySelector('svg[class*="copy"]') ||
+        btn.querySelector('svg.octicon-copy') ||
+        btn.querySelector('[class*="copy"]');
+      
+      if (!isCopyButton) return;
+      
+      // 检查按钮是否与当前 input 相关（在同一个 input-group 或相邻）
+      const btnContainer = btn.closest('.input-group') || btn.closest('.d-flex') || btn.parentElement;
+      const inputContainer = input.closest('.input-group') || input.closest('.d-flex') || input.parentElement;
+      
+      // 如果按钮和 input 不在相近的容器中，跳过
+      if (btnContainer !== inputContainer && !btnContainer.contains(input) && !inputContainer.contains(btn)) {
+        // 检查是否是相邻元素
+        if (btn.parentElement !== input.parentElement && !btn.parentElement.contains(input)) {
+          return;
+        }
       }
+      
+      btn._cfspiderIntercepted = true;
+      
+      // 使用 capture 阶段拦截点击
+      btn.addEventListener('click', (e) => {
+        const state = input._cfspiderState;
+        if (state && state.isAccelerated) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+          
+          // 写入加速后的 URL 到剪贴板
+          navigator.clipboard.writeText(state.accelerated).then(() => {
+            showCopySuccess(btn);
+            console.log('CFspider: 已复制加速链接:', state.accelerated);
+          }).catch(err => {
+            console.error('CFspider: 复制失败:', err);
+            // 回退方案
+            const textarea = document.createElement('textarea');
+            textarea.value = state.accelerated;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            showCopySuccess(btn);
+          });
+          
+          return false;
+        }
+      }, true);
+      
+      console.log('CFspider: 已拦截复制按钮:', btn);
     });
   }
   
   // 显示复制成功
   function showCopySuccess(btn) {
     const originalHTML = btn.innerHTML;
-    btn.innerHTML = '<svg viewBox="0 0 16 16" width="16" height="16" fill="#3fb950"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg>';
+    const successIcon = '<svg viewBox="0 0 16 16" width="16" height="16" fill="#3fb950"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg>';
+    
+    // 显示成功状态
+    btn.innerHTML = successIcon;
+    btn.style.color = '#3fb950';
+    
     setTimeout(() => {
       btn.innerHTML = originalHTML;
+      btn.style.color = '';
     }, 1500);
   }
   
