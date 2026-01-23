@@ -10,10 +10,12 @@ CFspider - Cloudflare 代理 IP 池 Python 库
 - 网页镜像（保存网页到本地，自动重写资源链接）
 
 UUID 使用说明：
-    需要 UUID 的方法（使用 VLESS 协议）：
+    需要 UUID 的方法（使用 VLESS 协议，支持双层代理 two_proxy）：
         - cfspider.get/post/... (使用 cf_proxies 时)
         - cfspider.Session
         - cfspider.StealthSession
+        - cfspider.Browser (浏览器自动化，UUID 可自动获取)
+        - cfspider.WebMirror (网页镜像)
     
     无需 UUID 的方法（使用 /proxy API）：
         - cfspider.AsyncSession

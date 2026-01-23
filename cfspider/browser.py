@@ -108,22 +108,26 @@ class Browser:
         >>> browser.close()
     """
     
-    def __init__(self, cf_proxies=None, headless=True, timeout=30, uuid=None):
+    def __init__(self, cf_proxies=None, headless=True, timeout=30, uuid=None, two_proxy=None):
         """
         初始化浏览器 / Initialize browser
+        
+        ⚠️ 需要 UUID（使用 VLESS 协议）
         
         Args:
             cf_proxies (str, optional): 代理地址 / Proxy address
                 - CFspider Workers URL（推荐）: "https://cfspider.violetqqcom.workers.dev"
                   UUID 将自动从 Workers 获取 / UUID auto-fetched from Workers
                 - VLESS 链接: "vless://uuid@host:port?path=/xxx#name"
-                        - HTTP 代理: "http://ip:port" 或 "ip:port"
-                        - SOCKS5 代理: "socks5://ip:port"
+                - HTTP 代理: "http://ip:port" 或 "ip:port"
+                - SOCKS5 代理: "socks5://ip:port"
                 不填则直接使用本地网络 / None for direct connection
             headless (bool): 是否无头模式，默认 True / Headless mode (default: True)
             timeout (int): 请求超时时间（秒），默认 30 / Timeout in seconds (default: 30)
             uuid (str, optional): VLESS UUID（可选，不填则自动获取）
                                  / VLESS UUID (optional, auto-fetched)
+            two_proxy (str, optional): 双层代理配置，格式 "host:port:user:pass"
+                                      用于国内无法直连时使用第二层代理
             
         Examples:
             >>> # 简化用法（推荐）
@@ -133,6 +137,13 @@ class Browser:
             >>> browser = Browser(
             ...     cf_proxies="https://cfspider.violetqqcom.workers.dev",
             ...     uuid="c373c80c-58e4-4e64-8db5-40096905ec58"
+            ... )
+            >>> 
+            >>> # 使用双层代理
+            >>> browser = Browser(
+            ...     cf_proxies="https://cfspider.violetqqcom.workers.dev",
+            ...     uuid="c373c80c-58e4-4e64-8db5-40096905ec58",
+            ...     two_proxy="us.cliproxy.io:3010:user:pass"
             ... )
             >>> 
             >>> # 使用 VLESS 链接
@@ -149,6 +160,7 @@ class Browser:
         self.cf_proxies = cf_proxies
         self.headless = headless
         self.timeout = timeout
+        self.two_proxy = two_proxy
         self._vless_proxy = None
         
         # 解析代理地址
@@ -159,7 +171,7 @@ class Browser:
             if vless_info:
                 # 使用 VLESS 链接
                 ws_url = f"wss://{vless_info['host']}{vless_info['path']}"
-                self._vless_proxy = LocalVlessProxy(ws_url, vless_info['uuid'])
+                self._vless_proxy = LocalVlessProxy(ws_url, vless_info['uuid'], two_proxy=two_proxy)
                 port = self._vless_proxy.start()
                 proxy_url = f"http://127.0.0.1:{port}"
             # 2. HTTP/SOCKS5 代理格式
@@ -171,7 +183,7 @@ class Browser:
                     # 使用 VLESS 代理
                     hostname = cf_proxies.replace('https://', '').replace('http://', '').split('/')[0]
                     ws_url = f'wss://{hostname}/{uuid}'
-                    self._vless_proxy = LocalVlessProxy(ws_url, uuid)
+                    self._vless_proxy = LocalVlessProxy(ws_url, uuid, two_proxy=two_proxy)
                     port = self._vless_proxy.start()
                     proxy_url = f"http://127.0.0.1:{port}"
                 else:
@@ -186,7 +198,7 @@ class Browser:
                 uuid = uuid or self._get_workers_uuid(f"https://{hostname}")
                 if uuid:
                     ws_url = f'wss://{hostname}/{uuid}'
-                    self._vless_proxy = LocalVlessProxy(ws_url, uuid)
+                    self._vless_proxy = LocalVlessProxy(ws_url, uuid, two_proxy=two_proxy)
                     port = self._vless_proxy.start()
                     proxy_url = f"http://127.0.0.1:{port}"
                 else:
