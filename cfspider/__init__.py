@@ -9,6 +9,18 @@ CFspider - Cloudflare 代理 IP 池 Python 库
 - IP 地图可视化（生成 Cyberpunk 风格的地图）
 - 网页镜像（保存网页到本地，自动重写资源链接）
 
+UUID 使用说明：
+    需要 UUID 的方法（使用 VLESS 协议）：
+        - cfspider.get/post/... (使用 cf_proxies 时)
+        - cfspider.Session
+        - cfspider.StealthSession
+    
+    无需 UUID 的方法（使用 /proxy API）：
+        - cfspider.AsyncSession
+        - cfspider.aget/apost/...
+        - cfspider.impersonate_get/post/...
+        - cfspider.ImpersonateSession
+
 快速开始：
     >>> import cfspider
     >>> 
@@ -16,28 +28,27 @@ CFspider - Cloudflare 代理 IP 池 Python 库
     >>> response = cfspider.get("https://httpbin.org/ip")
     >>> print(response.json())
     >>> 
-    >>> # 使用 Cloudflare Workers 代理
+    >>> # 使用 VLESS 代理（需要 UUID）
     >>> response = cfspider.get(
     ...     "https://httpbin.org/ip",
-    ...     cf_proxies="https://your-workers.dev"
+    ...     cf_proxies="https://your-workers.dev",
+    ...     uuid="your-uuid"
     ... )
     >>> print(response.cf_colo)  # Cloudflare 节点代码
     >>> 
-    >>> # 启用隐身模式（自动添加 15+ 浏览器请求头）
-    >>> response = cfspider.get(
-    ...     "https://example.com",
-    ...     stealth=True,
-    ...     stealth_browser='chrome'
-    ... )
+    >>> # 异步请求（无需 UUID）
+    >>> async with cfspider.AsyncSession(cf_proxies="https://your-workers.dev") as session:
+    ...     response = await session.get("https://httpbin.org/ip")
     >>> 
-    >>> # TLS 指纹模拟
-    >>> response = cfspider.get(
+    >>> # TLS 指纹模拟（无需 UUID）
+    >>> response = cfspider.impersonate_get(
     ...     "https://example.com",
-    ...     impersonate="chrome131"
+    ...     impersonate="chrome131",
+    ...     cf_proxies="https://your-workers.dev"
     ... )
 
 版本信息：
-    - 版本号: 1.8.0
+    - 版本号: 1.8.6
     - 协议: Apache License 2.0
     - 文档: https://www.cfspider.com
 

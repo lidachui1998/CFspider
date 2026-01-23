@@ -252,12 +252,14 @@ async def arequest(
     **kwargs
 ) -> AsyncCFSpiderResponse:
     """
-    发送异步 HTTP 请求
+    发送异步 HTTP 请求（无需 UUID）
+    
+    使用 /proxy API 路由，无需提供 UUID。
     
     Args:
         method: HTTP 方法
         url: 目标 URL
-        cf_proxies: 代理地址（选填）
+        cf_proxies: Workers 代理地址（选填，无需 UUID）
                     - 当 cf_workers=True 时，填写 CFspider Workers 地址
                     - 当 cf_workers=False 时，填写普通代理地址
         cf_workers: 是否使用 CFspider Workers API（默认 True）
@@ -266,6 +268,10 @@ async def arequest(
     
     Returns:
         AsyncCFSpiderResponse: 异步响应对象
+    
+    Example:
+        # 无需 UUID
+        response = await cfspider.aget("https://httpbin.org/ip", cf_proxies="https://your-workers.dev")
     """
     params = kwargs.pop("params", None)
     headers = kwargs.pop("headers", {})

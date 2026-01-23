@@ -13,14 +13,25 @@ from .async_api import AsyncCFSpiderResponse, AsyncStreamResponse
 
 class AsyncSession:
     """
-    异步会话类
+    异步会话类（无需 UUID）
     
     提供可复用的 httpx.AsyncClient，支持 HTTP/2 和连接池。
+    使用 /proxy API 路由，无需提供 UUID。
+    
+    Note:
+        - 基础使用：无需 UUID，直接使用
+        - 双层代理 HTTP：支持 two_proxy 参数
+        - 双层代理 HTTPS：请使用 cfspider.get() + uuid + two_proxy
     
     Example:
-        async with cfspider.AsyncSession(cf_proxies="workers.dev") as session:
+        # 无需 UUID
+        async with cfspider.AsyncSession(cf_proxies="https://your-workers.dev") as session:
             r1 = await session.get("https://example.com")
             r2 = await session.post("https://example.com", json={"key": "value"})
+        
+        # 双层代理 (仅支持 HTTP)
+        async with cfspider.AsyncSession(cf_proxies="...", two_proxy="host:port:user:pass") as session:
+            r = await session.get("http://httpbin.org/ip")  # 注意是 http://
     """
     
     def __init__(

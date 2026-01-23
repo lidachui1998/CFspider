@@ -91,13 +91,16 @@ def impersonate_request(
     **kwargs
 ) -> ImpersonateResponse:
     """
-    使用 TLS 指纹模拟发送请求
+    使用 TLS 指纹模拟发送请求（无需 UUID）
+    
+    使用 /proxy API 路由，无需提供 UUID。
+    支持 25+ 种浏览器指纹（Chrome、Safari、Firefox、Edge）。
     
     Args:
         method: HTTP 方法
         url: 目标 URL
         impersonate: 浏览器指纹（如 chrome131, safari18_0, firefox133）
-        cf_proxies: 代理地址（选填）
+        cf_proxies: Workers 代理地址（选填，无需 UUID）
         cf_workers: 是否使用 CFspider Workers API（默认 True）
         **kwargs: 其他参数
     
@@ -105,7 +108,12 @@ def impersonate_request(
         ImpersonateResponse: 响应对象
     
     Example:
-        >>> response = cfspider.impersonate_get("https://example.com", impersonate="chrome131")
+        # 无需 UUID，直接使用
+        >>> response = cfspider.impersonate_get(
+        ...     "https://example.com", 
+        ...     impersonate="chrome131",
+        ...     cf_proxies="https://your-workers.dev"  # 无需 UUID
+        ... )
         >>> print(response.text)
     """
     curl_requests = _get_curl_cffi()
