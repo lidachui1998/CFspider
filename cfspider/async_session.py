@@ -43,24 +43,30 @@ class AsyncSession:
         headers: Optional[Dict[str, str]] = None,
         cookies: Optional[Dict[str, str]] = None,
         token: Optional[str] = None,
-        uuid: Optional[str] = None,
+        uuid: Optional[str] = None,  # 无需填写，仅保留兼容性
         two_proxy: Optional[str] = None,
         **kwargs
     ):
         """
-        初始化异步会话
+        初始化异步会话（无需 UUID）
+        
+        使用 Workers 的 /proxy API，无需提供 UUID 即可使用。
         
         Args:
-            cf_proxies: 代理地址（选填）
+            cf_proxies: Workers 地址，如 "https://your-workers.dev"
             cf_workers: 是否使用 CFspider Workers API（默认 True）
             http2: 是否启用 HTTP/2（默认 True）
-            timeout: 默认超时时间（秒）
+            timeout: 默认超时时间（秒），默认 30
             headers: 默认请求头
             cookies: 默认 Cookies
-            token: CFspider Workers API token（选填）
-            uuid: VLESS UUID（选填）
-            two_proxy: 双层代理地址，格式 host:port:user:pass（选填）
+            token: CFspider Workers API token（选填，用于访问受保护的 Workers）
+            uuid: 保留参数，无需填写（AsyncSession 使用 /proxy API，不需要 UUID）
+            two_proxy: 双层代理地址，格式 host:port:user:pass（仅支持 HTTP 请求）
             **kwargs: 传递给 httpx.AsyncClient 的其他参数
+        
+        Note:
+            双层代理仅支持 HTTP 请求。如需 HTTPS 双层代理，请使用：
+            cfspider.get(..., uuid="your-uuid", two_proxy="...")
         """
         self.cf_proxies = cf_proxies
         self.cf_workers = cf_workers
