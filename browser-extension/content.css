@@ -78,3 +78,35 @@
   box-shadow: 0 4px 12px rgba(0, 212, 255, 0.3);
 }
 
+/* Clone URL 加速切换按钮 */
+.cfspider-accel-toggle {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #00d4ff 0%, #7b2cbf 100%);
+  color: #fff !important;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 212, 255, 0.3);
+}
+
+.cfspider-accel-toggle:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 212, 255, 0.4);
+}
+
+.cfspider-accel-toggle.active {
+  background: linear-gradient(135deg, #3fb950 0%, #238636 100%);
+  box-shadow: 0 2px 8px rgba(63, 185, 80, 0.3);
+}
+
+.cfspider-accel-toggle.active:hover {
+  box-shadow: 0 4px 12px rgba(63, 185, 80, 0.4);
+}
+

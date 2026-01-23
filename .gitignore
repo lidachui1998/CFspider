@@ -41,3 +41,8 @@ media/videos/1080p60/CameraFollowCursorCVScene.mp4
 media/images/
 media/text/
 media/videos/1080p60/partial_movie_files/
+
+# 大视频文件
+cfspider教程.mp4
+*.mp4
+!media/videos/1080p60/CameraFollowCursorCV.mp4
