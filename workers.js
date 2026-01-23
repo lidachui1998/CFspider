@@ -2301,7 +2301,10 @@ function generateCFspiderPage(request, url, visitorIP, userID, newIpEnabled = tr
     const longitude = request.cf?.longitude || '0';
     const continent = request.cf?.continent || 'XX';
     const lang = url.searchParams.get('lang') || 'zh';
-    const VERSION = '1.8.4';
+    const VERSION = '1.8.5';
+    
+    // 是否使用环境变量配置 UUID
+    const hasEnvUUID = !isDefaultUUID;
     
     // 解析双层代理配置
     let twoProxyHost = '', twoProxyPort = '', twoProxyUser = '', twoProxyPass = '', twoProxyEnabled = false;
@@ -2408,6 +2411,9 @@ function generateCFspiderPage(request, url, visitorIP, userID, newIpEnabled = tr
     const coloName = coloNames[colo] || colo;
     const continentName = continentNames[continent] || continent;
     const cityName = city;
+    
+    // 页面配置功能
+    const pageConfigEnabled = !hasEnvUUID; // 没有环境变量配置时启用页面配置
     
     return `<!DOCTYPE html>
 <html lang="${lang === 'zh' ? 'zh-CN' : 'en'}">
@@ -2784,10 +2790,39 @@ function generateCFspiderPage(request, url, visitorIP, userID, newIpEnabled = tr
         }
         .footer-credits a { color: var(--accent-cyan); text-decoration: none; }
         
+        /* Modal Styles */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: var(--bg-secondary); border: 2px solid var(--accent-cyan); border-radius: 16px; padding: 32px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; }
+        .modal-title { font-family: 'Orbitron', sans-serif; color: var(--accent-cyan); font-size: 1.3rem; margin-bottom: 16px; }
+        .modal-subtitle { color: var(--text-secondary); margin-bottom: 20px; font-size: 0.9rem; }
+        .modal-uuid { background: var(--bg-primary); border: 1px solid var(--border-color); padding: 16px; border-radius: 8px; font-family: monospace; font-size: 1rem; color: var(--accent-magenta); text-align: center; margin-bottom: 16px; word-break: break-all; user-select: all; }
+        .modal-vless { background: var(--bg-primary); border: 1px solid var(--border-color); padding: 12px; border-radius: 8px; font-family: monospace; font-size: 0.75rem; color: var(--accent-cyan); word-break: break-all; margin-bottom: 16px; max-height: 100px; overflow-y: auto; }
+        .modal-warning { color: var(--accent-orange); font-size: 0.85rem; margin: 16px 0; padding: 12px; background: rgba(219,109,40,0.15); border-radius: 8px; }
+        .modal-buttons { display: flex; gap: 12px; flex-wrap: wrap; }
+        .modal-btn { flex: 1; min-width: 120px; padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-family: inherit; transition: all 0.3s; }
+        .modal-btn-primary { background: var(--accent-cyan); color: var(--bg-primary); }
+        .modal-btn-primary:hover { background: var(--accent-green); }
+        .modal-btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); }
+        .modal-input { width: 100%; padding: 12px 16px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-size: 1rem; font-family: inherit; margin-bottom: 12px; }
+        .modal-input:focus { outline: none; border-color: var(--accent-cyan); }
+        .modal-hint { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 16px; }
+        
+        /* Page Config Styles */
+        .config-mode-badge { background: var(--accent-green); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
+        .config-mode-badge.env { background: var(--accent-cyan); }
+        .config-mode-badge.page { background: var(--accent-magenta); }
+        .uuid-masked { color: var(--text-secondary); letter-spacing: 2px; }
+        .proxy-masked { color: var(--text-secondary); }
+        .action-btn { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); cursor: pointer; font-size: 0.8rem; transition: all 0.2s; }
+        .action-btn:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+        .action-btn.danger:hover { border-color: var(--accent-orange); color: var(--accent-orange); }
+        
         @media (max-width: 768px) {
             .logo { font-size: 2.5rem; }
             .vless-header { flex-direction: column; align-items: flex-start; }
             .vless-config-grid { grid-template-columns: 1fr; }
+            .modal-buttons { flex-direction: column; }
         }
     </style>
 </head>
@@ -2799,79 +2834,83 @@ function generateCFspiderPage(request, url, visitorIP, userID, newIpEnabled = tr
             <p class="subtitle">${t.subtitle}</p>
         </header>
         
-        <!-- VLESS Hero Section -->
-        ${userID ? `
+        <!-- VLESS Hero Section with Page Config -->
         <div class="vless-hero">
             <div class="vless-header">
                 <div class="vless-title-main">
                     <span>VLESS PROXY</span>
-            </div>
+                    <span class="config-mode-badge ${hasEnvUUID ? 'env' : 'page'}">${hasEnvUUID ? '环境变量模式' : '页面配置模式'}</span>
+                </div>
                 <div class="vless-status">
                     <div class="status-pill active"><span class="status-dot"></span> ${t.online}</div>
                     <div class="status-pill">${t.newIp}: ON</div>
-            </div>
+                </div>
             </div>
             
-            ${isDefaultUUID ? `
-            <div class="warning-banner">
-                <span class="warning-icon">⚠️</span>
-                <div class="warning-content">
-                    <div class="warning-title">Security Notice</div>
-                    <div class="warning-text">${t.defaultUuidWarning}</div>
-                    <div class="warning-path">Dashboard → Workers → Settings → Variables → Add "UUID"</div>
+            ${hasEnvUUID ? `
+            <!-- 环境变量模式：直接显示配置 -->
+            <div class="vless-config-grid">
+                <div class="config-card">
+                    <div class="config-card-title">Connection</div>
+                    <div class="config-item"><span class="config-label">${t.vlessHost}</span><span class="config-value">${vlessHost}</span></div>
+                    <div class="config-item"><span class="config-label">${t.vlessPort}</span><span class="config-value">443</span></div>
+                    <div class="config-item"><span class="config-label">${t.transport}</span><span class="config-value">WebSocket</span></div>
+                    <div class="config-item"><span class="config-label">${t.security}</span><span class="config-value success">TLS</span></div>
+                </div>
+                <div class="config-card">
+                    <div class="config-card-title">Authentication</div>
+                    <div class="config-item"><span class="config-label">${t.vlessUUID}</span><span class="config-value uuid">${userID}</span></div>
+                    <div class="config-item"><span class="config-label">Path</span><span class="config-value">/${userID.substring(0,8)}...</span></div>
+                    <div class="config-item"><span class="config-label">${t.encryption}</span><span class="config-value">none</span></div>
+                    <div class="config-item"><span class="config-label">Mode</span><span class="config-value success">Private (ENV)</span></div>
+                </div>
             </div>
+            <div class="vless-link-box" onclick="copyVlessLink(this)">
+                <span class="copy-hint" id="copyHint">${t.vlessCopy}</span>
+                <div class="vless-link-label"><span>${t.vlessLink}</span></div>
+                <div class="vless-link-text" id="vlessLink">${vlessLink}</div>
             </div>
-            ` : ''}
+            ` : `
+            <!-- 页面配置模式：UUID 管理 -->
+            <div class="config-card" style="margin-bottom: 24px;">
+                <div class="config-card-title" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>您的 UUID</span>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="action-btn" onclick="showUuidModal()">查看</button>
+                        <button class="action-btn danger" onclick="deleteUuid()">删除</button>
+                    </div>
+                </div>
+                <div class="config-item">
+                    <span class="config-label">UUID</span>
+                    <span class="config-value uuid-masked" id="uuidDisplay">点击查看生成的 UUID</span>
+                </div>
+                <div class="config-item">
+                    <span class="config-label">VLESS 链接</span>
+                    <span class="config-value" id="vlessStatus" style="color: var(--text-secondary);">请先查看 UUID</span>
+                </div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+                    💡 UUID 仅在弹窗中显示一次，请务必复制保存。删除后可重新生成。
+                </div>
+            </div>
             
             <div class="vless-config-grid">
                 <div class="config-card">
                     <div class="config-card-title">Connection</div>
-                    <div class="config-item">
-                        <span class="config-label">${t.vlessHost}</span>
-                        <span class="config-value">${vlessHost}</span>
-                </div>
-                    <div class="config-item">
-                        <span class="config-label">${t.vlessPort}</span>
-                        <span class="config-value">443</span>
-                </div>
-                    <div class="config-item">
-                        <span class="config-label">${t.transport}</span>
-                        <span class="config-value">WebSocket</span>
-                </div>
-                    <div class="config-item">
-                        <span class="config-label">${t.security}</span>
-                        <span class="config-value success">TLS</span>
-                </div>
+                    <div class="config-item"><span class="config-label">${t.vlessHost}</span><span class="config-value">${vlessHost}</span></div>
+                    <div class="config-item"><span class="config-label">${t.vlessPort}</span><span class="config-value">443</span></div>
+                    <div class="config-item"><span class="config-label">${t.transport}</span><span class="config-value">WebSocket</span></div>
+                    <div class="config-item"><span class="config-label">${t.security}</span><span class="config-value success">TLS</span></div>
                 </div>
                 <div class="config-card">
-                    <div class="config-card-title">Authentication</div>
-                    <div class="config-item">
-                        <span class="config-label">${t.vlessUUID}</span>
-                        <span class="config-value uuid">${userID}</span>
+                    <div class="config-card-title">Settings</div>
+                    <div class="config-item"><span class="config-label">${t.encryption}</span><span class="config-value">none</span></div>
+                    <div class="config-item"><span class="config-label">Mode</span><span class="config-value" style="color: var(--accent-magenta);">Page Config</span></div>
+                    <div class="config-item"><span class="config-label">Storage</span><span class="config-value">localStorage</span></div>
+                    <div class="config-item"><span class="config-label">Status</span><span class="config-value success">${t.online}</span></div>
                 </div>
-                    <div class="config-item">
-                        <span class="config-label">Path</span>
-                        <span class="config-value">/${userID.substring(0,8)}...</span>
-                </div>
-                    <div class="config-item">
-                        <span class="config-label">${t.encryption}</span>
-                        <span class="config-value">none</span>
             </div>
-                    <div class="config-item">
-                        <span class="config-label">Status</span>
-                        <span class="config-value success">${isDefaultUUID ? 'Public' : 'Private'}</span>
-                </div>
-                </div>
-                </div>
+            `}
             
-            <div class="vless-link-box" onclick="copyVlessLink(this)">
-                <span class="copy-hint" id="copyHint">${t.vlessCopy}</span>
-                <div class="vless-link-label">
-                    <span>${t.vlessLink}</span>
-                </div>
-                <div class="vless-link-text" id="vlessLink">${vlessLink}</div>
-        </div>
-        
             <div class="clients-section">
                 <div class="clients-title">${t.v2rayClients}</div>
                 <div class="clients-grid">
@@ -2883,26 +2922,32 @@ function generateCFspiderPage(request, url, visitorIP, userID, newIpEnabled = tr
                     <span class="client-tag">NekoRay</span>
                     <span class="client-tag">Surge</span>
                     <span class="client-tag">Quantumult X</span>
+                </div>
             </div>
-            </div>
-            </div>
-        ` : ''}
+        </div>
         
         <!-- Two-Proxy Section -->
-        ${userID ? `
         <div class="two-proxy-section" style="background: ${twoProxyEnabled ? 'linear-gradient(135deg, rgba(63,185,80,0.15) 0%, rgba(88,166,255,0.15) 100%)' : 'var(--bg-secondary)'}; border: ${twoProxyEnabled ? '2px solid var(--accent-green)' : '1px solid var(--border-color)'}; border-radius: 16px; padding: 24px; margin-bottom: 32px;">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
                 <div style="font-family: 'Orbitron', sans-serif; font-size: 1.2rem; color: ${twoProxyEnabled ? 'var(--accent-green)' : 'var(--text-secondary)'}; display: flex; align-items: center; gap: 10px;">
-                    <span>🔗</span>
                     <span>${t.twoProxyTitle}</span>
+                    <span class="config-mode-badge ${twoProxyEnabled ? 'env' : 'page'}" style="font-size: 0.65rem;">${twoProxyEnabled ? 'ENV' : '可选'}</span>
                 </div>
-                <div class="status-pill ${twoProxyEnabled ? 'active' : ''}" style="background: var(--bg-tertiary); border: 1px solid ${twoProxyEnabled ? 'var(--accent-green)' : 'var(--border-color)'}; padding: 6px 14px; border-radius: 20px; font-size: 0.8rem;">
-                    ${twoProxyEnabled ? '<span class="status-dot" style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green); animation: pulse 2s infinite; display: inline-block; margin-right: 6px;"></span>' : ''}
+                ${!twoProxyEnabled && !hasEnvUUID ? `
+                <div style="display: flex; gap: 8px;">
+                    <button class="action-btn" onclick="showProxyModal()">配置</button>
+                    <button class="action-btn danger" onclick="deleteProxy()">删除</button>
+                </div>
+                ` : `
+                <div class="status-pill ${twoProxyEnabled ? 'active' : ''}">
+                    ${twoProxyEnabled ? '<span class="status-dot"></span>' : ''}
                     ${twoProxyEnabled ? t.twoProxyEnabled : t.twoProxyDisabled}
                 </div>
+                `}
             </div>
             
             ${twoProxyEnabled ? `
+            <!-- 环境变量模式：显示双层代理配置 -->
             <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
                 <div style="font-size: 0.8rem; color: var(--accent-cyan); margin-bottom: 8px;">${t.twoProxyDesc}</div>
                 <div style="display: flex; gap: 24px; flex-wrap: wrap; font-size: 0.9rem;">
@@ -2911,14 +2956,22 @@ function generateCFspiderPage(request, url, visitorIP, userID, newIpEnabled = tr
                     <div><span style="color: var(--text-secondary);">${t.twoProxyAuth}:</span> <span style="color: ${twoProxyUser ? 'var(--accent-yellow)' : 'var(--text-secondary)'};">${twoProxyUser ? twoProxyUser.substring(0, 8) + '***' : 'None'}</span></div>
                 </div>
             </div>
-            
-            <div class="vless-link-box" onclick="copyTwoProxyLink(this)" style="background: var(--bg-primary); border: 2px solid var(--accent-green); border-radius: 12px; padding: 20px; cursor: pointer; transition: all 0.3s; position: relative;">
-                <span class="copy-hint" id="copyHint2" style="position: absolute; top: 16px; right: 16px; font-size: 0.75rem; color: var(--text-secondary); background: var(--bg-tertiary); padding: 4px 10px; border-radius: 4px;">${t.vlessCopy}</span>
-                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-                    <span>🚀</span>
-                    <span>${t.twoProxyLink} (${t.exitIp}: ${twoProxyHost})</span>
+            <div class="vless-link-box" onclick="copyTwoProxyLink(this)" style="background: var(--bg-primary); border: 2px solid var(--accent-green);">
+                <span class="copy-hint" id="copyHint2">${t.vlessCopy}</span>
+                <div class="vless-link-label"><span>${t.twoProxyLink} (${t.exitIp}: ${twoProxyHost})</span></div>
+                <div class="vless-link-text" id="twoProxyLinkText">${twoProxyLink}</div>
+            </div>
+            ` : `
+            <!-- 页面配置模式或未配置 -->
+            ${!hasEnvUUID ? `
+            <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px;">
+                <div class="config-item">
+                    <span class="config-label">双层代理</span>
+                    <span class="config-value proxy-masked" id="proxyDisplay">未配置</span>
                 </div>
-                <div class="vless-link-text" id="twoProxyLinkText" style="font-size: 0.85rem; color: var(--accent-green); word-break: break-all; line-height: 1.8; padding: 12px; background: var(--bg-secondary); border-radius: 8px; user-select: all;">${twoProxyLink}</div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+                    💡 国内无法直连海外代理时使用，格式：host:port 或 host:port:user:pass
+                </div>
             </div>
             ` : `
             <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 24px;">
@@ -2935,8 +2988,8 @@ function generateCFspiderPage(request, url, visitorIP, userID, newIpEnabled = tr
                 </div>
             </div>
             `}
+            `}
         </div>
-        ` : ''}
         
         <!-- Stats Grid -->
         <div class="stats-grid">
@@ -2969,25 +3022,42 @@ function generateCFspiderPage(request, url, visitorIP, userID, newIpEnabled = tr
         
         <!-- Code Example -->
         <div class="code-section">
-            <div class="code-header">// Python Example - pip install cfspider</div>
+            <div class="code-header">// Python 基础用法 - pip install cfspider</div>
             <pre><span class="code-keyword">import</span> cfspider
 
-<span class="code-comment"># ${lang === 'zh' ? '使用 CFspider 代理池获取不同 IP' : 'Use CFspider proxy pool for different IPs'}</span>
-<span class="code-keyword">for</span> i <span class="code-keyword">in</span> range(<span class="code-string">5</span>):
+<span class="code-comment"># 基础使用</span>
 response = cfspider.<span class="code-function">get</span>(
     <span class="code-string">"https://httpbin.org/ip"</span>,
-        cf_proxies=<span class="code-string">"https://your-workers.dev"</span>${isDefaultUUID ? '' : `,
-        uuid=<span class="code-string">"your-uuid-here"</span>`}
+    cf_proxies=<span class="code-string">"https://${vlessHost}"</span>,
+    uuid=<span class="code-string">"${hasEnvUUID ? userID : '<您的UUID>'}"</span>
 )
-    <span class="code-function">print</span>(response.json())
+<span class="code-function">print</span>(response.json())
 
-<span class="code-comment"># ${lang === 'zh' ? '固定 IP 模式 - 保持同一出口 IP' : 'Static IP mode - keep same IP'}</span>
+<span class="code-comment"># 固定 IP 模式</span>
 response = cfspider.<span class="code-function">get</span>(
     <span class="code-string">"https://httpbin.org/ip"</span>,
-    cf_proxies=<span class="code-string">"https://your-workers.dev"</span>,
+    cf_proxies=<span class="code-string">"https://${vlessHost}"</span>,
+    uuid=<span class="code-string">"${hasEnvUUID ? userID : '<您的UUID>'}"</span>,
     static_ip=<span class="code-keyword">True</span>
 )</pre>
         </div>
+        
+        ${twoProxyEnabled || !hasEnvUUID ? `
+        <!-- Two-Proxy Code Example -->
+        <div class="code-section">
+            <div class="code-header">// Python 双层代理用法 - 国内无法直连海外代理时使用</div>
+            <pre><span class="code-keyword">import</span> cfspider
+
+<span class="code-comment"># 双层代理：本地 → Workers → 第二层代理 → 目标</span>
+response = cfspider.<span class="code-function">get</span>(
+    <span class="code-string">"https://httpbin.org/ip"</span>,
+    cf_proxies=<span class="code-string">"https://${vlessHost}"</span>,
+    uuid=<span class="code-string">"${hasEnvUUID ? userID : '<您的UUID>'}"</span>,
+    two_proxy=<span class="code-string">"${twoProxyEnabled ? twoProxy : '<host:port:user:pass>'}"</span>
+)
+<span class="code-function">print</span>(response.json())</pre>
+        </div>
+        ` : ''}
         
         <!-- API Section -->
         <div class="api-section">
@@ -3014,9 +3084,173 @@ response = cfspider.<span class="code-function">get</span>(
         </footer>
     </div>
     
+    <!-- UUID Modal -->
+    <div class="modal" id="uuidModal">
+        <div class="modal-content">
+            <div class="modal-title">您的 UUID</div>
+            <div class="modal-subtitle">请立即复制保存，关闭后将无法再次查看明文</div>
+            <div class="modal-uuid" id="uuidShowInModal"></div>
+            <button class="modal-btn modal-btn-primary" style="width: 100%; margin-bottom: 16px;" onclick="copyUuid()">复制 UUID</button>
+            <div class="modal-title" style="font-size: 1rem; margin-top: 16px;">VLESS 导入链接</div>
+            <div class="modal-vless" id="vlessShowInModal"></div>
+            <button class="modal-btn modal-btn-primary" style="width: 100%; margin-bottom: 16px;" onclick="copyVlessFromModal()">复制 VLESS 链接</button>
+            <div class="modal-warning">⚠️ 以上信息仅显示一次，关闭后无法再次查看明文</div>
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-secondary" onclick="closeUuidModal()">我已保存，关闭</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Proxy Modal -->
+    <div class="modal" id="proxyModal">
+        <div class="modal-content">
+            <div class="modal-title">配置双层代理</div>
+            <div class="modal-subtitle">用于国内无法直连海外代理 IP 时使用</div>
+            <input type="text" class="modal-input" id="proxyInput" placeholder="格式: host:port 或 host:port:user:pass">
+            <div class="modal-hint">示例: us.cliproxy.io:3010:username:password</div>
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-secondary" onclick="closeProxyModal()">取消</button>
+                <button class="modal-btn modal-btn-primary" onclick="saveProxy()">确认</button>
+            </div>
+        </div>
+    </div>
+    
     <script>
+        const HOST = '${vlessHost}';
+        const ENV_UUID = ${hasEnvUUID ? `'${userID}'` : 'null'};
+        const ENV_TWO_PROXY = ${twoProxyEnabled ? `'${twoProxy}'` : 'null'};
+        const STORAGE_KEY = 'cfspider_config_' + HOST;
+        
+        // 配置管理
+        function loadConfig() {
+            if (ENV_UUID) return { uuid: ENV_UUID, uuidViewed: true, twoProxy: ENV_TWO_PROXY || '' };
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) return JSON.parse(saved);
+            const config = { uuid: crypto.randomUUID(), uuidViewed: false, twoProxy: '' };
+            saveConfig(config);
+            return config;
+        }
+        
+        function saveConfig(config) {
+            if (!ENV_UUID) localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+        }
+        
+        let config = loadConfig();
+        
+        function maskUuid(uuid) {
+            return uuid.substring(0, 4) + '****-****-****-****-' + uuid.slice(-4);
+        }
+        
+        function maskProxy(proxy) {
+            if (!proxy) return '未配置';
+            const parts = proxy.split(':');
+            if (parts.length >= 2) {
+                return parts[0].substring(0, 4) + '****:' + parts[1] + (parts.length > 2 ? ':****' : '');
+            }
+            return '****';
+        }
+        
+        function updateDisplay() {
+            if (ENV_UUID) return; // 环境变量模式不需要更新
+            
+            const uuidDisplay = document.getElementById('uuidDisplay');
+            const vlessStatus = document.getElementById('vlessStatus');
+            const proxyDisplay = document.getElementById('proxyDisplay');
+            
+            if (uuidDisplay) {
+                if (config.uuidViewed) {
+                    uuidDisplay.textContent = maskUuid(config.uuid);
+                    uuidDisplay.classList.add('uuid-masked');
+                } else {
+                    uuidDisplay.textContent = '点击查看生成的 UUID';
+                    uuidDisplay.classList.remove('uuid-masked');
+                }
+            }
+            
+            if (vlessStatus) {
+                vlessStatus.textContent = config.uuidViewed ? '已查看，请在弹窗中复制' : '请先查看 UUID';
+            }
+            
+            if (proxyDisplay) {
+                proxyDisplay.textContent = maskProxy(config.twoProxy);
+            }
+            
+            updateCodeExamples();
+        }
+        
+        function updateCodeExamples() {
+            // 更新代码示例中的 UUID 占位符
+            const codeSection = document.querySelector('.code-section pre');
+            if (!codeSection || ENV_UUID) return;
+            
+            const placeholder = config.uuidViewed ? '<已查看，请粘贴您的UUID>' : '<请先查看UUID>';
+            // 代码示例在服务端渲染，这里可以添加动态更新逻辑
+        }
+        
+        // UUID 操作
+        function showUuidModal() {
+            document.getElementById('uuidShowInModal').textContent = config.uuid;
+            const vlessLink = 'vless://' + config.uuid + '@' + HOST + ':443?security=tls&type=ws&host=' + HOST + '&sni=' + HOST + '&path=%2F' + config.uuid + '&encryption=none#CFspider';
+            document.getElementById('vlessShowInModal').textContent = vlessLink;
+            document.getElementById('uuidModal').classList.add('show');
+        }
+        
+        function copyUuid() {
+            navigator.clipboard.writeText(config.uuid);
+            alert('UUID 已复制到剪贴板');
+        }
+        
+        function copyVlessFromModal() {
+            const vlessLink = 'vless://' + config.uuid + '@' + HOST + ':443?security=tls&type=ws&host=' + HOST + '&sni=' + HOST + '&path=%2F' + config.uuid + '&encryption=none#CFspider';
+            navigator.clipboard.writeText(vlessLink);
+            alert('VLESS 链接已复制到剪贴板');
+        }
+        
+        function closeUuidModal() {
+            config.uuidViewed = true;
+            saveConfig(config);
+            document.getElementById('uuidModal').classList.remove('show');
+            updateDisplay();
+        }
+        
+        function deleteUuid() {
+            if (!confirm('确定删除当前 UUID？将生成一个新的 UUID。')) return;
+            config.uuid = crypto.randomUUID();
+            config.uuidViewed = false;
+            saveConfig(config);
+            updateDisplay();
+            alert('已生成新的 UUID，请点击查看并保存');
+        }
+        
+        // 双层代理操作
+        function showProxyModal() {
+            document.getElementById('proxyInput').value = config.twoProxy;
+            document.getElementById('proxyModal').classList.add('show');
+        }
+        
+        function closeProxyModal() {
+            document.getElementById('proxyModal').classList.remove('show');
+        }
+        
+        function saveProxy() {
+            const value = document.getElementById('proxyInput').value.trim();
+            config.twoProxy = value;
+            saveConfig(config);
+            closeProxyModal();
+            updateDisplay();
+        }
+        
+        function deleteProxy() {
+            if (!confirm('确定删除双层代理配置？')) return;
+            config.twoProxy = '';
+            saveConfig(config);
+            updateDisplay();
+        }
+        
+        // 复制功能（环境变量模式）
         function copyVlessLink(el) {
-            const link = document.getElementById('vlessLink').innerText;
+            const link = document.getElementById('vlessLink')?.innerText;
+            if (!link) return;
             const hint = document.getElementById('copyHint');
             navigator.clipboard.writeText(link).then(() => {
                 hint.textContent = '${t.copySuccess}';
@@ -3044,6 +3278,9 @@ response = cfspider.<span class="code-function">get</span>(
                 }, 2000);
             });
         }
+        
+        // 初始化
+        updateDisplay();
     </script>
 </body>
 </html>`;

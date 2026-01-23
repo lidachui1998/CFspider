@@ -494,28 +494,28 @@ class LocalVlessProxy:
             else:
                 # 直接连接目标
                 conn = vless.connect(host, port)
-                
-                # 重建请求
-                lines = original_request.split(b'\r\n')
-                lines[0] = f'{method} {path} HTTP/1.1'.encode('utf-8')
-                
-                # 更新 Host 头
-                new_lines = [lines[0]]
-                has_host = False
-                for line in lines[1:]:
-                    if line.lower().startswith(b'host:'):
-                        new_lines.append(f'Host: {host}'.encode('utf-8'))
-                        has_host = True
-                    elif line.lower().startswith(b'proxy-'):
-                        continue
-                    else:
-                        new_lines.append(line)
-                
-                if not has_host:
-                    new_lines.insert(1, f'Host: {host}'.encode('utf-8'))
-                
-                request = b'\r\n'.join(new_lines)
-                conn.send(request)
+            
+            # 重建请求
+            lines = original_request.split(b'\r\n')
+            lines[0] = f'{method} {path} HTTP/1.1'.encode('utf-8')
+            
+            # 更新 Host 头
+            new_lines = [lines[0]]
+            has_host = False
+            for line in lines[1:]:
+                if line.lower().startswith(b'host:'):
+                    new_lines.append(f'Host: {host}'.encode('utf-8'))
+                    has_host = True
+                elif line.lower().startswith(b'proxy-'):
+                    continue
+                else:
+                    new_lines.append(line)
+            
+            if not has_host:
+                new_lines.insert(1, f'Host: {host}'.encode('utf-8'))
+            
+            request = b'\r\n'.join(new_lines)
+            conn.send(request)
             
             # 读取响应并转发
             self._relay_response(client, conn)
