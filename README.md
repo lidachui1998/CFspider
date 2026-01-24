@@ -53,7 +53,7 @@
 
 ## X27CN 加密库
 
-X27CN 是 CFspider 使用的代码混淆加密算法，现已作为独立 Python 库发布。
+X27CN 是 CFspider 使用的代码混淆加密算法，现已作为独立 Python 库发布。支持文本加密和整个前端文件混淆。
 
 ### 安装
 
@@ -66,35 +66,53 @@ pip install x27cn
 ```python
 import x27cn
 
-# 加密
+# 加密文本
 encrypted = x27cn.encrypt('Hello World')
-print(encrypted)  # <faee><38db><e120>...
-
-# 解密
 decrypted = x27cn.decrypt(encrypted)
-print(decrypted)  # Hello World
 
-# 自定义密钥
-encrypted = x27cn.encrypt('敏感数据', key='mySecretKey')
-decrypted = x27cn.decrypt(encrypted, key='mySecretKey')
+# 混淆整个 HTML 文件（生成自解密页面）
+x27cn.obfuscate_file('index.html')  # 生成 index.obf.html
+
+# 混淆 JavaScript 文件
+x27cn.obfuscate_file('app.js')  # 生成 app.obf.js
+
+# 混淆 CSS 文件
+x27cn.obfuscate_file('style.css')  # 生成 style.obf.css
 ```
 
-### 支持的格式
+### 命令行工具
 
-```python
-# 标准格式（<xxxx> 标签）
-encrypted = x27cn.encrypt('text')
+```bash
+# 混淆 HTML 文件
+x27cn obfuscate index.html
 
-# 纯十六进制
-hex_encrypted = x27cn.encrypt_hex('text')
+# 混淆 JS 文件
+x27cn obfuscate app.js dist/app.js
 
-# Base64
-b64_encrypted = x27cn.encrypt_base64('text')
+# 使用自定义密钥
+x27cn obfuscate app.html --key=mySecretKey
+
+# 加密/解密文本
+x27cn encrypt -t "Hello World"
+x27cn decrypt -t "<faee><38db>..."
 ```
+
+### 混淆效果
+
+```html
+<!-- 原始 HTML -->
+<h1>Hello World</h1>
+<script>alert('Secret!');</script>
+
+<!-- 混淆后（自动解密） -->
+<script>(function(){var _$='<9525>...';...})();</script>
+```
+
+浏览器加载混淆后的文件会自动解密并正常显示原始内容，源代码无法被直接查看。
 
 ### 安全说明
 
-X27CN 设计用于**代码混淆**，不是密码学安全的加密算法。适用于前端代码混淆、API 响应混淆、配置文件保护等场景。
+X27CN 设计用于**代码混淆**，不是密码学安全的加密算法。适用于前端代码保护、API 响应混淆、防止代码被轻易复制等场景。
 
 ---
 

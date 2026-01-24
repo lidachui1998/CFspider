@@ -14,6 +14,10 @@ Code obfuscation and encryption library
     # 自定义密钥
     encrypted = x27cn.encrypt('data', key='mySecretKey')
     decrypted = x27cn.decrypt(encrypted, key='mySecretKey')
+    
+    # 文件混淆
+    x27cn.obfuscate_file('app.html')  # 生成 app.obf.html
+    x27cn.obfuscate_file('script.js')  # 生成 script.obf.js
 """
 
 from .core import (
@@ -27,9 +31,19 @@ from .core import (
     DEFAULT_KEY,
 )
 
-__version__ = '1.0.0'
+from .obfuscate import (
+    obfuscate_html,
+    obfuscate_js,
+    obfuscate_css,
+    obfuscate_file,
+    obfuscate_inline_js,
+    obfuscate_inline_css,
+)
+
+__version__ = '1.1.0'
 __author__ = 'CFspider'
 __all__ = [
+    # 核心加密
     'encrypt',
     'decrypt',
     'encrypt_hex',
@@ -38,5 +52,12 @@ __all__ = [
     'decrypt_base64',
     'generate_key',
     'DEFAULT_KEY',
+    # 文件混淆
+    'obfuscate_html',
+    'obfuscate_js',
+    'obfuscate_css',
+    'obfuscate_file',
+    'obfuscate_inline_js',
+    'obfuscate_inline_css',
 ]
 
