@@ -14,18 +14,18 @@
 
 ---
 
-## ⚠️ 重要：破皮版 Workers（增强反检测）
+## 重要：破皮版 Workers（增强反检测）
 
 > **如果你的 Workers 被 Cloudflare 检测封禁（错误代码 1101），请使用 `破皮版workers.js`！**
 
-### 🔴 安全警告
+### 安全警告
 
 **强烈建议使用 Cloudflare 小号部署！** 代理类 Workers 存在被 Cloudflare 检测封禁的风险：
 
-- ⚠️ **不要使用主账号**：主账号被封禁可能导致所有服务（域名、DNS、CDN）受影响
-- ⚠️ **注册专用小号**：使用新邮箱注册一个专门用于部署代理的 Cloudflare 账号
-- ⚠️ **小号被封无损失**：即使被封禁也不会影响你的主要业务
-- ⚠️ **代码仍有风险**：破皮版虽经混淆处理，但无法保证 100% 不被检测
+- **不要使用主账号**：主账号被封禁可能导致所有服务（域名、DNS、CDN）受影响
+- **注册专用小号**：使用新邮箱注册一个专门用于部署代理的 Cloudflare 账号
+- **小号被封无损失**：即使被封禁也不会影响你的主要业务
+- **代码仍有风险**：破皮版虽经混淆处理，但无法保证 100% 不被检测
 
 ### 破皮版特性
 
@@ -94,14 +94,14 @@ vless://你的UUID@your-workers.dev:443?encryption=none&security=tls&type=ws&hos
 
 | 方法 | 需要 UUID | 支持双层代理 | 说明 |
 |------|----------|-------------|------|
-| `cfspider.get/post/...` | ✅ 需要 | ✅ 支持 | 基础 HTTP 方法 |
-| `cfspider.Session` | ✅ 需要 | ✅ 支持 | 会话管理 |
-| `cfspider.StealthSession` | ✅ 需要 | ✅ 支持 | 隐身会话 |
-| `cfspider.Browser` | ✅ 需要（可自动获取） | ✅ 支持 | 浏览器自动化 |
-| `cfspider.WebMirror` | ✅ 需要（可自动获取） | ✅ 支持 | 网页镜像 |
-| `cfspider.AsyncSession` | ❌ 无需 | ⚠️ 仅 HTTP | 异步会话 |
-| `cfspider.aget/apost/...` | ❌ 无需 | ⚠️ 仅 HTTP | 异步方法 |
-| `cfspider.impersonate_*` | ❌ 无需 | ⚠️ 受限 | TLS 指纹模拟 |
+| `cfspider.get/post/...` | 需要 | 支持 | 基础 HTTP 方法 |
+| `cfspider.Session` | 需要 | 支持 | 会话管理 |
+| `cfspider.StealthSession` | 需要 | 支持 | 隐身会话 |
+| `cfspider.Browser` | 需要（可自动获取） | 支持 | 浏览器自动化 |
+| `cfspider.WebMirror` | 需要（可自动获取） | 支持 | 网页镜像 |
+| `cfspider.AsyncSession` | 无需 | 仅 HTTP | 异步会话 |
+| `cfspider.aget/apost/...` | 无需 | 仅 HTTP | 异步方法 |
+| `cfspider.impersonate_*` | 无需 | 受限 | TLS 指纹模拟 |
 
 ## 双层代理（国内无法直连代理时使用）
 
@@ -116,8 +116,8 @@ vless://你的UUID@your-workers.dev:443?encryption=none&security=tls&type=ws&hos
 
 | 场景 | 问题 | 解决方案 |
 |------|------|---------|
-| **国内直连代理** | 无法连接海外代理服务器 | ❌ 连接失败 |
-| **使用双层代理** | 通过 CF Workers 中转 | ✅ 正常访问 |
+| **国内直连代理** | 无法连接海外代理服务器 | 连接失败 |
+| **使用双层代理** | 通过 CF Workers 中转 | 正常访问 |
 
 ### 实测对比（国内网络环境）
 
@@ -126,12 +126,12 @@ vless://你的UUID@your-workers.dev:443?encryption=none&security=tls&type=ws&hos
 
 [测试 1] 直接使用 HTTP 代理
 代理地址: proxy.example.com:3010
-结果: ❌ 连接失败 - 403 Forbidden（代理服务器拒绝国内 IP）
+结果: 连接失败 - 403 Forbidden（代理服务器拒绝国内 IP）
 
 [测试 2] 通过 CFspider 双层代理
 Workers: https://your-workers.dev
 第二层代理: proxy.example.com:3010
-结果: ✅ 成功
+结果: 成功
 代理出口 IP: xxx.xxx.xxx.xxx（日本）
 ```
 
@@ -144,7 +144,7 @@ Workers: https://your-workers.dev
 | 出口 IP | Cloudflare WARP（荷兰/美国等） | 第二层代理的 IP（可指定地区） |
 | IP 类型 | 数据中心 IP | 可选住宅/移动 IP |
 | 适用场景 | 一般爬虫、匿名访问 | 需要特定地区 IP、住宅 IP、国内无法直连代理 |
-| 国内可用性 | ✅ 可用 | ✅ 可用（解决直连问题） |
+| 国内可用性 | 可用 | 可用（解决直连问题） |
 
 ### 使用方式
 
@@ -190,10 +190,10 @@ print(response.json())  # 出口 IP 为第二层代理的 IP
 
 | Workers `TWO_PROXY` | Python `two_proxy` | 结果 |
 |---------------------|--------------------|----- |
-| ✅ 已配置 | ❌ 不传 | 自动使用 Workers 配置 |
-| ❌ 未配置 | ✅ 传入 | 使用 Python 参数 |
-| ✅ 已配置 | ✅ 传入 | **Python 参数优先** |
-| ❌ 未配置 | ❌ 不传 | 使用 Cloudflare WARP IP |
+| 已配置 | 不传 | 自动使用 Workers 配置 |
+| 未配置 | 传入 | 使用 Python 参数 |
+| 已配置 | 传入 | **Python 参数优先** |
+| 未配置 | 不传 | 使用 Cloudflare WARP IP |
 
 ### 代理 IP 购买
 
