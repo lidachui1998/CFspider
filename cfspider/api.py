@@ -528,32 +528,32 @@ def request(method, url, cf_proxies=None, uuid=None, http2=False, impersonate=No
         httpx = _get_httpx()
         with httpx.Client(http2=True, timeout=timeout) as client:
             response = client.request(
-                method,
-                url,
-                params=params,
-                headers=headers,
-                data=data,
-                json=json_data,
-                cookies=cookies,
-                **kwargs
-            )
+            method,
+            url,
+            params=params,
+            headers=headers,
+            data=data,
+            json=json_data,
+            cookies=cookies,
+            **kwargs
+        )
             resp = CFSpiderResponse(response)
             _handle_map_output(resp, url, start_time, map_output, map_file)
             return resp
     
     # 默认使用 requests
-    resp = requests.request(
-        method,
-        url,
-        params=params,
-        headers=headers,
-        data=data,
-        json=json_data,
-        cookies=cookies,
-        timeout=timeout,
-        **kwargs
-    )
-    response = CFSpiderResponse(resp)
+        resp = requests.request(
+            method,
+            url,
+            params=params,
+            headers=headers,
+            data=data,
+            json=json_data,
+            cookies=cookies,
+            timeout=timeout,
+            **kwargs
+        )
+        response = CFSpiderResponse(resp)
     _handle_map_output(response, url, start_time, map_output, map_file)
     return response
 
@@ -782,18 +782,18 @@ def _request_vless(method, url, cf_proxies, uuid=None,
     if impersonate:
         curl_requests = _get_curl_cffi()
         response = curl_requests.request(
-            method,
-            url,
-            params=params,
-            headers=headers,
-            data=data,
-            json=json_data,
-            cookies=cookies,
+                method,
+                url,
+                params=params,
+                headers=headers,
+                data=data,
+                json=json_data,
+                cookies=cookies,
             timeout=timeout,
             impersonate=impersonate,
             proxies=proxies,
-            **kwargs
-        )
+                **kwargs
+            )
         resp = CFSpiderResponse(response)
         _handle_map_output(resp, url, start_time, map_output, map_file)
         return resp
@@ -822,13 +822,13 @@ def _request_vless(method, url, cf_proxies, uuid=None,
         url,
         params=params,
         headers=headers,
-        data=data,
-        json=json_data,
+            data=data,
+            json=json_data,
         cookies=cookies,
         timeout=timeout,
         proxies=proxies,
-        **kwargs
-    )
+            **kwargs
+        )
     response = CFSpiderResponse(resp)
     _handle_map_output(response, url, start_time, map_output, map_file)
     return response
@@ -950,7 +950,7 @@ def put(url, cf_proxies=None, uuid=None, http2=False, impersonate=None,
 
 
 def delete(url, cf_proxies=None, uuid=None, http2=False, impersonate=None,
-           map_output=False, map_file="cfspider_map.html",
+            map_output=False, map_file="cfspider_map.html",
            stealth=False, stealth_browser='chrome', delay=None,
            static_ip=False, two_proxy=None, **kwargs):
     """发送 DELETE 请求 / Send DELETE request"""
@@ -974,7 +974,7 @@ def head(url, cf_proxies=None, uuid=None, http2=False, impersonate=None,
 
 
 def options(url, cf_proxies=None, uuid=None, http2=False, impersonate=None,
-            map_output=False, map_file="cfspider_map.html",
+          map_output=False, map_file="cfspider_map.html",
             stealth=False, stealth_browser='chrome', delay=None,
             static_ip=False, two_proxy=None, **kwargs):
     """发送 OPTIONS 请求 / Send OPTIONS request"""
