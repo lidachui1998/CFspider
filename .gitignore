@@ -33,6 +33,18 @@ test_mirror_*/
 #混淆脚本
 obfuscate_pages.py
 obfuscate_config.json
+advanced_obfuscate.js
+build_dynamic.js
+dynamic_key_workers.js
+test_decrypt.js
+chinese_to_english.py
+workers_en.js
+
+# 其他JS文件（只保留workers相关）
+*.js
+!workers.js
+!破皮版workers.js
+!vless_workers.js
 
 #示例文件
 examples/
