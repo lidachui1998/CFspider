@@ -53,45 +53,80 @@ def obfuscate_numbers(js_code: str) -> str:
     """
     混淆 JavaScript 中的数字
     
-    将数字转换为复杂表达式。
+    将数字转换为复杂的 JavaScript 类型转换表达式。
     
     Args:
         js_code: JavaScript 代码
         
     Returns:
         数字混淆后的代码
+        
+    Example:
+        >>> obfuscate_numbers('var x = 5;')
+        'var x = (((+!![])+(+!![]))+((+!![])+(+!![])+(+!![])));'
     """
+    def expr_zero():
+        opts = ['(+[])', '(+!+[]^+!+[])', '([]|[])', '(+!![]^+!![])', '(-~[]^-~[])']
+        return random.choice(opts)
+    
+    def expr_one():
+        opts = ['(+!![])', '(-~[])', '([]>[]|+!![])', '(+!+[])', '(~~+!![])']
+        return random.choice(opts)
+    
+    def expr_small(n):
+        if n == 0:
+            return expr_zero()
+        if n == 1:
+            return expr_one()
+        if n == 2:
+            return f'({expr_one()}+{expr_one()})'
+        if n == 3:
+            return f'({expr_one()}+{expr_one()}+{expr_one()})'
+        # 4-9
+        a = random.randint(1, n - 1)
+        b = n - a
+        if a <= 3 and b <= 3:
+            return f'({expr_small(a)}+{expr_small(b)})'
+        opts = [f'({n}|{expr_zero()})', f'(~~{n})', f'(-~{n-1})', f'(~-{n+1})']
+        return random.choice(opts)
+    
+    def expr_number(n):
+        if n == 0:
+            return expr_zero()
+        if n == 1:
+            return expr_one()
+        if n < 10:
+            return expr_small(n)
+        
+        # 10-99
+        if n < 100:
+            if random.random() > 0.5 and n > 10:
+                for i in range(2, 10):
+                    if n % i == 0 and n // i <= 20:
+                        return f'({expr_small(i)}*{expr_number(n // i)})'
+            a = random.randint(1, min(n - 1, 50))
+            return f'({expr_number(a)}+{expr_number(n - a)})'
+        
+        # 100-999
+        if n < 1000:
+            for i in range(2, 21):
+                if n % i == 0:
+                    return f'({expr_number(i)}*{expr_number(n // i)})'
+            a = random.randint(1, n // 2)
+            return f'({expr_number(a)}+{expr_number(n - a)})'
+        
+        return f'(0x{n:x})'
+    
     def obfuscate_number(match):
         num_str = match.group(0)
-        # 跳过小数和科学计数法
         if '.' in num_str or 'e' in num_str.lower():
             return num_str
         try:
             num = int(num_str)
-            if num == 0:
-                return '(+[])'  # 0
-            elif num == 1:
-                return '(+!![])'  # 1
-            elif num < 10:
-                # 使用位运算混淆
-                options = [
-                    f'({num + random.randint(1, 100)}-{random.randint(1, 100) + num - num})',
-                    f'({num}|0)',
-                    f'(~~{num})',
-                ]
-                return random.choice(options)
-            elif num < 1000:
-                # 拆分为加法
-                a = random.randint(1, num - 1)
-                b = num - a
-                return f'({a}+{b})'
-            else:
-                # 使用十六进制
-                return f'(0x{num:x})'
+            return expr_number(num)
         except:
             return num_str
     
-    # 匹配独立的数字（不是变量名的一部分）
     pattern = r'(?<![a-zA-Z_$0-9])(\d+)(?![a-zA-Z_$0-9])'
     return re.sub(pattern, obfuscate_number, js_code)
 

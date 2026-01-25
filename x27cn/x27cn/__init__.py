@@ -89,7 +89,7 @@ from .advanced import (
     quick_protect,
 )
 
-__version__ = '1.4.1'
+__version__ = '1.4.3'
 __author__ = 'CFspider'
 __all__ = [
     # 核心加密

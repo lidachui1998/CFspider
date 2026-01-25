@@ -111,7 +111,7 @@ def minify_js(js: str, mangle: bool = True) -> str:
 
 
 def _mangle_variables(js: str) -> str:
-    """混淆局部变量名"""
+    """混淆局部变量名 - 使用 o/O/l/I 等易混淆字符"""
     # 保护字符串
     strings = []
     def save_string(match):
@@ -123,50 +123,72 @@ def _mangle_variables(js: str) -> str:
     js = re.sub(r'"(?:[^"\\]|\\.)*"', save_string, js)
     js = re.sub(r'`(?:[^`\\]|\\.)*`', save_string, js)
     
-    # 找到函数作用域内的变量声明
-    var_pattern = re.compile(r'\b(var|let|const)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)')
+    # 迷惑性字符集 - 重点使用 o/O/l/I 等易混淆字符 (不使用数字)
+    CONFUSING_CHARS = [
+        # 核心混淆字符 (重复多次增加出现概率)
+        'o', 'O', 'o', 'O', 'o', 'O', 'o', 'O',  # o/O 混淆
+        'l', 'I', 'l', 'I', 'l', 'I', 'l', 'I',  # l/I 混淆
+        # 希腊/西里尔 (看起来像拉丁字母)
+        'α', 'ο', 'а', 'е', 'о', 'ο', 'о', 'ο',  # 多个 o 变体
+        # 科普特(埃及) - 看起来像 o
+        'ⲁ', 'ⲟ', 'ⲓ', 'ⲉ', 'ⲟ', 'ⲟ',
+        # Lisu
+        'ꓲ', 'ꓳ', 'ꓴ', 'ꓵ',
+    ]
     
-    # 生成迷惑性变量名
+    # 生成迷惑性变量名 - 始终使用 6-8 个字符的复杂名称
     def gen_name(index):
-        # 迷惑性字符集：
-        # - l, I, 1 (小写L, 大写i, 数字1)
-        # - O, 0 (大写O, 数字0)
-        # - α, а (希腊alpha, 西里尔a)
-        # - ⲁ, ⲃ, ⲅ (科普特/埃及字母)
-        # - ꓲ, ꓳ, ꓴ (Lisu字母，像数字)
-        confusing = [
-            'l', 'I', 'O',  # 基础迷惑
-            'α', 'ο', 'а', 'е', 'о',  # 希腊/西里尔 (像 a, o, e)
-            'ⲁ', 'ⲃ', 'ⲅ', 'ⲇ', 'ⲉ', 'ⲏ', 'ⲓ', 'ⲕ', 'ⲙ', 'ⲛ', 'ⲟ', 'ⲣ', 'ⲥ', 'ⲧ',  # 科普特(埃及)
-            'ꓲ', 'ꓳ', 'ꓴ', 'ꓵ', 'ꓶ', 'ꓷ', 'ꓸ', 'ꓹ', 'ꓺ', 'ꓻ',  # Lisu
-        ]
-        base = len(confusing)
-        if index < base:
-            return confusing[index]
-        # 组合生成更多
-        first = index // base
-        second = index % base
-        if first < base:
-            return confusing[first] + confusing[second]
-        # 三字符
-        third = first // base
-        first = first % base
-        return confusing[third % base] + confusing[first] + confusing[second]
+        length = 6 + (index % 3)  # 6-8 字符
+        name = ''
+        # 使用更好的随机算法避免重复
+        primes = [7919, 104729, 15485863, 32452843, 49979687]
+        seed = index * 31337 + primes[index % len(primes)]
+        for i in range(length):
+            seed = ((seed * 48271) % 2147483647)
+            char_idx = (seed + i * 17) % len(CONFUSING_CHARS)
+            name += CONFUSING_CHARS[char_idx]
+        return name
+    
+    # 找到变量和函数声明
+    var_pattern = re.compile(r'\b(var|let|const)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)')
+    func_pattern = re.compile(r'\bfunction\s+([a-zA-Z_$][a-zA-Z0-9_$]*)')
+    
+    reserved = {'undefined', 'null', 'true', 'false', 'NaN', 'Infinity', 'length', 'prototype',
+                'Object', 'Array', 'String', 'Number', 'Boolean', 'Function', 'Symbol', 'Math',
+                'Date', 'RegExp', 'Error', 'JSON', 'console', 'window', 'document', 'navigator',
+                'setTimeout', 'setInterval', 'clearTimeout', 'clearInterval', 'Promise'}
     
     # 收集变量
     var_map = {}
     index = 0
+    
     for match in var_pattern.finditer(js):
         name = match.group(2)
-        if name not in var_map and name not in ['undefined', 'null', 'true', 'false', 'NaN', 'Infinity']:
+        if name not in var_map and name not in reserved and len(name) > 1:
             var_map[name] = gen_name(index)
             index += 1
     
-    # 替换变量（从长到短排序避免部分替换）
+    for match in func_pattern.finditer(js):
+        name = match.group(1)
+        if name not in var_map and name not in reserved and len(name) > 1:
+            var_map[name] = gen_name(index)
+            index += 1
+    
+    # 使用占位符替换，避免新名称被再次替换
+    placeholders = {}
+    p_idx = 0
+    
+    # 第一步：替换为占位符
     for old_name in sorted(var_map.keys(), key=len, reverse=True):
         new_name = var_map[old_name]
-        # 只替换完整单词
-        js = re.sub(rf'\b{re.escape(old_name)}\b', new_name, js)
+        placeholder = f'__VAR_{p_idx}__'
+        placeholders[placeholder] = new_name
+        js = re.sub(rf'\b{re.escape(old_name)}\b', placeholder, js)
+        p_idx += 1
+    
+    # 第二步：占位符替换为新名称
+    for placeholder, new_name in placeholders.items():
+        js = js.replace(placeholder, new_name)
     
     # 恢复字符串
     for i, s in enumerate(strings):
@@ -381,6 +403,7 @@ def minify_html_node(html: str) -> str:
 def obfuscate_identifiers(js: str) -> str:
     """
     混淆 JavaScript 标识符（变量名、函数名）
+    使用 o/O/l/I 等易混淆字符
     
     Args:
         js: JavaScript 源代码
@@ -389,10 +412,10 @@ def obfuscate_identifiers(js: str) -> str:
         混淆后的代码
     """
     # 保护字符串和正则
-    protected = []
+    prot_arr = []
     def save_protected(match):
-        idx = len(protected)
-        protected.append(match.group(0))
+        idx = len(prot_arr)
+        prot_arr.append(match.group(0))
         return f'__PROT_{idx}__'
     
     # 保护字符串
@@ -403,40 +426,39 @@ def obfuscate_identifiers(js: str) -> str:
     # 保护正则
     js = re.sub(r'/(?![/*])(?:[^/\\]|\\.)+/[gimsuy]*', save_protected, js)
     
+    # 迷惑性字符集 - 重点使用 o/O/l/I 等易混淆字符
+    CONFUSING_CHARS = [
+        'o', 'O', 'o', 'O', 'o', 'O', 'o', 'O',
+        'l', 'I', 'l', 'I', 'l', 'I', 'l', 'I',
+        'α', 'ο', 'а', 'е', 'о', 'ο', 'о', 'ο',
+        'ⲁ', 'ⲟ', 'ⲓ', 'ⲉ', 'ⲟ', 'ⲟ',
+        'ꓲ', 'ꓳ', 'ꓴ', 'ꓵ',
+    ]
+    
+    def gen_name(index):
+        """生成 6-8 个字符的复杂迷惑性名称"""
+        length = 6 + (index % 3)
+        name = ''
+        primes = [7919, 104729, 15485863, 32452843, 49979687]
+        seed = index * 31337 + primes[index % len(primes)]
+        for i in range(length):
+            seed = ((seed * 48271) % 2147483647)
+            char_idx = (seed + i * 17) % len(CONFUSING_CHARS)
+            name += CONFUSING_CHARS[char_idx]
+        return name
+    
     # 收集声明的变量和函数
     declarations = set()
     
-    # var/let/const 声明
     for match in re.finditer(r'\b(?:var|let|const)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)', js):
         declarations.add(match.group(1))
     
-    # function 声明
     for match in re.finditer(r'\bfunction\s+([a-zA-Z_$][a-zA-Z0-9_$]*)', js):
         declarations.add(match.group(1))
     
-    # 生成迷惑性混淆名
-    def gen_name(index):
-        # 迷惑性字符集：埃及科普特 + 希腊 + 西里尔 + l/I/O/0
-        confusing = [
-            'l', 'I', 'O',  # l/I, O/0 迷惑
-            'α', 'ο', 'а', 'е', 'о',  # 希腊/西里尔 (像 a, o, e)
-            'ⲁ', 'ⲃ', 'ⲅ', 'ⲇ', 'ⲉ', 'ⲏ', 'ⲓ', 'ⲕ', 'ⲙ', 'ⲛ', 'ⲟ', 'ⲣ', 'ⲥ', 'ⲧ',  # 科普特(埃及)
-            'ꓲ', 'ꓳ', 'ꓴ', 'ꓵ', 'ꓶ', 'ꓷ', 'ꓸ', 'ꓹ', 'ꓺ', 'ꓻ',  # Lisu
-        ]
-        base = len(confusing)
-        if index < base:
-            return confusing[index]
-        first = index // base
-        second = index % base
-        if first < base:
-            return confusing[first] + confusing[second]
-        third = first // base
-        first = first % base
-        return confusing[third % base] + confusing[first] + confusing[second]
-    
-    # 过滤保留字和内置对象
+    # 保留字
     reserved = {
-        'undefined', 'null', 'true', 'false', 'NaN', 'Infinity',
+        'undefined', 'null', 'true', 'false', 'NaN', 'Infinity', 'length', 'prototype',
         'Object', 'Array', 'String', 'Number', 'Boolean', 'Function',
         'Symbol', 'BigInt', 'Math', 'Date', 'RegExp', 'Error',
         'JSON', 'console', 'window', 'document', 'navigator',
@@ -460,12 +482,20 @@ def obfuscate_identifiers(js: str) -> str:
             name_map[name] = gen_name(idx)
             idx += 1
     
-    # 替换
+    # 使用占位符替换
+    placeholders = {}
+    p_idx = 0
     for old_name, new_name in name_map.items():
-        js = re.sub(rf'\b{re.escape(old_name)}\b', new_name, js)
+        placeholder = f'__VAR_{p_idx}__'
+        placeholders[placeholder] = new_name
+        js = re.sub(rf'\b{re.escape(old_name)}\b', placeholder, js)
+        p_idx += 1
+    
+    for placeholder, new_name in placeholders.items():
+        js = js.replace(placeholder, new_name)
     
     # 恢复保护的内容
-    for i, p in enumerate(protected):
+    for i, p in enumerate(prot_arr):
         js = js.replace(f'__PROT_{i}__', p)
     
     return js
@@ -474,6 +504,7 @@ def obfuscate_identifiers(js: str) -> str:
 def add_dead_code(js: str, complexity: int = 2) -> str:
     """
     添加无效代码增加逆向难度
+    使用迷惑性变量名
     
     Args:
         js: JavaScript 源代码
@@ -482,15 +513,22 @@ def add_dead_code(js: str, complexity: int = 2) -> str:
     Returns:
         添加死代码后的代码
     """
+    import random
+    
+    # 迷惑性字符集
+    chars = ['o', 'O', 'l', 'I', 'α', 'ο', 'а', 'о', 'ⲁ', 'ⲟ', 'ⲓ', 'ꓲ', 'ꓳ']
+    
+    def rand_name():
+        return ''.join(random.choices(chars, k=7))
+    
     dead_code_templates = [
-        'var _$d0=function(){return Math.random()>2};',
-        'var _$d1=(function(){var _=[];for(var i=0;i<0;i++)_.push(i);return _})();',
-        'if(typeof _$d2==="undefined")var _$d2=null;',
-        'try{if(false)throw new Error()}catch(_$e){}',
-        'var _$d3=Date.now()%1===2?1:0;',
+        f'var {rand_name()}=function(){{return Math.random()>(~~2)}};',
+        f'var {rand_name()}=(function(){{var {rand_name()}=[];for(var {rand_name()}=(+[]);{rand_name()}<(+[]);{rand_name()}++){rand_name()}.push({rand_name()});return {rand_name()}}})();',
+        f'if(typeof {rand_name()}===(+[])?null:undefined)var {rand_name()}=null;',
+        f'try{{if((+[]))throw new Error()}}catch({rand_name()}){{}}',
+        f'var {rand_name()}=Date.now()%(+!![])===((2|0))?((+!![])):((+[]));',
     ]
     
-    import random
     dead_codes = random.sample(dead_code_templates, min(complexity, len(dead_code_templates)))
     
     # 在代码开头添加

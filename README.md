@@ -151,9 +151,9 @@ print(workers.custom_url)     # 自定义域名 URL
 
 ---
 
-## X27CN 加密库
+## X27CN 加密库 (v1.4.3)
 
-X27CN 是 CFspider 使用的代码混淆加密算法，现已作为独立 Python 库发布。支持文本加密和整个前端文件混淆。
+X27CN 是 CFspider 使用的代码混淆加密算法，现已作为独立 Python 库发布。支持文本加密、密码安全、代码混淆和反调试保护。
 
 ### 安装
 
@@ -170,49 +170,67 @@ import x27cn
 encrypted = x27cn.encrypt('Hello World')
 decrypted = x27cn.decrypt(encrypted)
 
-# 混淆整个 HTML 文件（生成自解密页面）
+# 密码加密（更安全）
+encrypted = x27cn.encrypt_with_password('敏感数据', 'mypassword')
+decrypted = x27cn.decrypt_with_password(encrypted, 'mypassword')
+
+# 混淆整个 HTML/JS/CSS 文件
 x27cn.obfuscate_file('index.html')  # 生成 index.obf.html
+x27cn.obfuscate_file('app.js')      # 生成 app.obf.js
 
-# 混淆 JavaScript 文件
-x27cn.obfuscate_file('app.js')  # 生成 app.obf.js
+# 一键完整保护（混淆 + 反爬）
+protected = x27cn.full_obfuscate(js_code, level=3)
+```
 
-# 混淆 CSS 文件
-x27cn.obfuscate_file('style.css')  # 生成 style.obf.css
+### 数字混淆（v1.4.3 新增）
+
+使用 JavaScript 类型转换表达式，极难直接阅读：
+
+```python
+import x27cn
+
+code = 'var x = 5; var y = 100;'
+obfuscated = x27cn.obfuscate_numbers(code)
+# 输出: var x = (((-~[])+(+!+[]))+((+!![])+(~~+!![])+([]>[]|+!![]))); 
+#       var y = (((+!+[])+(+!![]))*(((-~[])+(+!![]))*(~~5)));
+```
+
+**表达式说明：**
+- `(+[])` = 0, `(+!![])` = 1, `(-~[])` = 1
+- 乘法分解、加法组合、位运算混合
+
+### 反调试保护
+
+```python
+# 一键添加反调试
+protected = x27cn.full_obfuscate(js_code, level=3)
+# 包含：无限 debugger、禁用 F12、控制台清除
+
+# 域名锁定
+protected = x27cn.full_obfuscate(js_code, domain_lock=['example.com'])
 ```
 
 ### 命令行工具
 
 ```bash
-# 混淆 HTML 文件
+# 一键保护（推荐）
+x27cn protect app.js --level=3
+
+# 混淆文件
 x27cn obfuscate index.html
-
-# 混淆 JS 文件
-x27cn obfuscate app.js dist/app.js
-
-# 使用自定义密钥
-x27cn obfuscate app.html --key=mySecretKey
 
 # 加密/解密文本
 x27cn encrypt -t "Hello World"
 x27cn decrypt -t "<faee><38db>..."
 ```
 
-### 混淆效果
+### 在线工具
 
-```html
-<!-- 原始 HTML -->
-<h1>Hello World</h1>
-<script>alert('Secret!');</script>
-
-<!-- 混淆后（自动解密） -->
-<script>(function(){var _$='<9525>...';...})();</script>
-```
-
-浏览器加载混淆后的文件会自动解密并正常显示原始内容，源代码无法被直接查看。
+访问 [X27CN 在线工具](https://cfspider.pages.dev) 可直接在浏览器中进行加密/解密和代码混淆。
 
 ### 安全说明
 
-X27CN 设计用于**代码混淆**，不是密码学安全的加密算法。适用于前端代码保护、API 响应混淆、防止代码被轻易复制等场景。
+X27CN 设计用于**代码混淆**，不是密码学安全的加密算法。适用于前端代码保护、API 响应混淆、防止代码被轻易复制等场景。密码加密功能使用 PBKDF2-SHA256 算法。
 
 ---
 
