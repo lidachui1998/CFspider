@@ -315,6 +315,35 @@ print(response.json())  # 出口 IP 为第二层代理的 IP
 
 - **DNSHE**: [https://my.dnshe.com/](https://my.dnshe.com/) - 提供免费域名注册，支持 GitHub 登录，适合个人开发者使用。注册后可将免费域名绑定到 Cloudflare Workers。
 
+### EdgeOne / 第三方 CDN 注意事项
+
+> ⚠️ **不建议使用第三方 CDN（如腾讯 EdgeOne）加速 Cloudflare Workers**
+
+**测试结果：**
+
+| 访问方式 | VLESS 连接 | 说明 |
+|---------|-----------|------|
+| 直接访问 Workers (`*.workers.dev`) | ✅ 成功 | 正常工作 |
+| Cloudflare 自定义域名 | ✅ 成功 | 推荐方式 |
+| 通过 EdgeOne CDN | ❌ 502 Bad Gateway | WebSocket 转发失败 |
+
+**原因分析：**
+
+1. **WebSocket 不兼容**：EdgeOne 等第三方 CDN 可能无法正确转发 VLESS 使用的 WebSocket 连接
+2. **增加延迟**：Workers 本身就是边缘计算，再套一层 CDN 反而增加延迟
+3. **Host 头问题**：第三方 CDN 可能修改 Host 头，导致 Workers 无法正确识别原始域名
+
+**解决方案：**
+
+1. **直接使用 Cloudflare 自定义域名（推荐）**：
+   - 在 Cloudflare Dashboard → Workers → 选择 Worker → Settings → Triggers → Custom Domains
+   - 添加自定义域名，DNS 直接指向 Cloudflare（橙色云）
+
+2. **如必须使用第三方 CDN**：
+   - 设置 `CUSTOM_HOST` 环境变量为你的自定义域名
+   - 确保 CDN 启用 WebSocket 支持
+   - 检查 CDN 是否正确传递 `X-Forwarded-Host` 或 `Host` 头
+
 代理格式示例：
 ```
 # HTTP 代理格式
