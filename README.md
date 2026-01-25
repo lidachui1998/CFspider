@@ -1,4 +1,4 @@
-# CFspider - Cloudflare Workers Spider
+﻿# CFspider - Cloudflare Workers Spider
 
 [![PyPI version](https://img.shields.io/pypi/v/cfspider)](https://pypi.org/project/cfspider/)
 [![Python](https://img.shields.io/pypi/pyversions/cfspider)](https://pypi.org/project/cfspider/)
@@ -2259,6 +2259,7 @@ Apache License 2.0
 - GitHub: https://github.com/violettoolssite/CFspider
 - PyPI: https://pypi.org/project/cfspider/
 - 官网: https://www.cfspider.com
+- 公益平台: https://free.violetteam.cloud/ （临时邮箱、GitHub加速、Docker加速、短链接、免费子域名、免费代理）
 - B 站视频教程: https://b23.tv/1uzOf7M
 - YouTube 视频教程: https://youtu.be/oPeXiIFJ9TA?si=ukXsX8iP86ZTB4LP
 - edgetunnel: https://github.com/cmliu/edgetunnel
