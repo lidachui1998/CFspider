@@ -542,18 +542,18 @@ def request(method, url, cf_proxies=None, uuid=None, http2=False, impersonate=No
             return resp
     
     # 默认使用 requests
-        resp = requests.request(
-            method,
-            url,
-            params=params,
-            headers=headers,
-            data=data,
-            json=json_data,
-            cookies=cookies,
-            timeout=timeout,
-            **kwargs
-        )
-        response = CFSpiderResponse(resp)
+    resp = requests.request(
+        method,
+        url,
+        params=params,
+        headers=headers,
+        data=data,
+        json=json_data,
+        cookies=cookies,
+        timeout=timeout,
+        **kwargs
+    )
+    response = CFSpiderResponse(resp)
     _handle_map_output(response, url, start_time, map_output, map_file)
     return response
 
