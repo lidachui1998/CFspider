@@ -114,9 +114,12 @@ app.whenReady().then(() => {
   // 配置 webview 的独立 session（persist: 前缀确保数据持久化到磁盘）
   const webviewSession = session.fromPartition('persist:cfspider')
   
-  // 设置真实的 User-Agent
-  const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+  // 设置最新版本的 Chrome User-Agent，避免网站兼容性警告
+  const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
   webviewSession.setUserAgent(userAgent)
+  
+  // 设置默认 session 的 User-Agent（某些情况会用到）
+  session.defaultSession.setUserAgent(userAgent)
 
   // 移除 X-Frame-Options 和 CSP 限制，允许在 webview 中加载任何网站
   webviewSession.webRequest.onHeadersReceived((details, callback) => {
@@ -425,15 +428,17 @@ ipcMain.handle('rules:save', async (_event, rules) => {
 ipcMain.handle('config:load', async () => {
   const fs = await import('fs/promises')
   const configPath = join(app.getPath('userData'), 'ai-config.json')
-  
+
   try {
     const content = await fs.readFile(configPath, 'utf-8')
     return JSON.parse(content)
   } catch {
+    // 默认使用内置 AI
     return {
-      endpoint: 'https://api.openai.com/v1/chat/completions',
+      endpoint: '',
       apiKey: '',
-      model: 'gpt-4'
+      model: '',
+      useBuiltIn: true
     }
   }
 })

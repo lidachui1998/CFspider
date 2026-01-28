@@ -29,6 +29,10 @@ jobs:
         working-directory: cfspider-browser
         run: npm ci
 
+      - name: Generate icons
+        working-directory: cfspider-browser
+        run: node scripts/generate-icons.js
+
       - name: Build Electron app
         working-directory: cfspider-browser
         run: npm run electron:build-win
@@ -58,6 +62,26 @@ jobs:
       - name: Install dependencies
         working-directory: cfspider-browser
         run: npm ci
+
+      - name: Generate icons
+        working-directory: cfspider-browser
+        run: node scripts/generate-icons.js
+
+      - name: Generate macOS icns
+        working-directory: cfspider-browser
+        run: |
+          mkdir -p build/icon.iconset
+          cp build/icons/16x16.png build/icon.iconset/icon_16x16.png
+          cp build/icons/32x32.png build/icon.iconset/icon_16x16@2x.png
+          cp build/icons/32x32.png build/icon.iconset/icon_32x32.png
+          cp build/icons/64x64.png build/icon.iconset/icon_32x32@2x.png
+          cp build/icons/128x128.png build/icon.iconset/icon_128x128.png
+          cp build/icons/256x256.png build/icon.iconset/icon_128x128@2x.png
+          cp build/icons/256x256.png build/icon.iconset/icon_256x256.png
+          cp build/icons/512x512.png build/icon.iconset/icon_256x256@2x.png
+          cp build/icons/512x512.png build/icon.iconset/icon_512x512.png
+          cp build/icons/1024x1024.png build/icon.iconset/icon_512x512@2x.png
+          iconutil -c icns build/icon.iconset -o build/icon.icns
 
       - name: Build Electron app
         working-directory: cfspider-browser
@@ -90,6 +114,10 @@ jobs:
       - name: Install dependencies
         working-directory: cfspider-browser
         run: npm ci
+
+      - name: Generate icons
+        working-directory: cfspider-browser
+        run: node scripts/generate-icons.js
 
       - name: Build Electron app
         working-directory: cfspider-browser
@@ -128,9 +156,9 @@ jobs:
             AI 驱动的智能浏览器，通过自然语言对话控制浏览器自动化。
             
             ### 下载
-            - **Windows**: cfspider-browser-Setup-*.exe
-            - **macOS**: cfspider-browser-*.dmg
-            - **Linux**: cfspider-browser-*.AppImage
+            - **Windows**: CFspider-Browser-Setup-*.exe
+            - **macOS**: CFspider-Browser-*.dmg
+            - **Linux**: CFspider-Browser-*.AppImage
             
             ### 功能特性
             - 自然语言控制浏览器

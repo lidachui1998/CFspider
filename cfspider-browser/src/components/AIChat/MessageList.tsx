@@ -366,6 +366,48 @@ function ElementSelectionCard({ data }: { data: { id: string; purpose: string; s
   )
 }
 
+// 继续按钮组件 - 当达到操作限制时显示
+function ContinueButton() {
+  const [isLoading, setIsLoading] = useState(false)
+  const { isAILoading } = useStore()
+  
+  const handleContinue = async () => {
+    if (isLoading || isAILoading) return
+    setIsLoading(true)
+    try {
+      await sendAIMessage('继续')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+  
+  if (isAILoading) return null
+  
+  return (
+    <div className="flex justify-center mt-3">
+      <button
+        onClick={handleContinue}
+        disabled={isLoading}
+        className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium shadow-md"
+      >
+        {isLoading ? (
+          <>
+            <Loader2 size={14} className="animate-spin" />
+            继续中...
+          </>
+        ) : (
+          <>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+            继续执行
+          </>
+        )}
+      </button>
+    </div>
+  )
+}
+
 // 获取工具调用的友好描述
 function getToolDescription(toolName: string, args: Record<string, unknown>): string {
   switch (toolName) {
@@ -475,8 +517,6 @@ function getToolDescription(toolName: string, args: Record<string, unknown>): st
       return '验证操作结果'
     case 'retry_with_alternative':
       return '尝试其他方法'
-    case 'check_website_safety':
-      return '检查网站安全'
     default:
       return toolName
   }
@@ -569,6 +609,11 @@ export default function MessageList({ messages }: MessageListProps) {
                 {/* 爬取结果卡片 */}
                 {hasContent && message.content?.includes('【爬取结果】') && (
                   <CrawlResultCard content={message.content} />
+                )}
+                
+                {/* 达到限制时显示继续按钮 */}
+                {hasContent && (message.content?.includes('Max iterations reached') || message.content?.includes('达到最大操作次数')) && (
+                  <ContinueButton />
                 )}
                 
                 {/* Final AI message - normal Markdown rendering */}

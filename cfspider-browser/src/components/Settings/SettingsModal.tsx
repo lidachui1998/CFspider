@@ -15,6 +15,7 @@ const COMMON_MODELS = [
 
 // AI 服务商预设配置
 const AI_PRESETS = [
+  { id: 'builtin', name: '内置 AI', endpoint: '', models: [], description: '开箱即用，无需配置', isBuiltIn: true },
   { id: 'custom', name: '自定义', endpoint: '', models: COMMON_MODELS, description: '自定义 API 地址，可选择常用模型' },
   { id: 'ollama', name: 'Ollama', endpoint: 'http://localhost:11434/v1/chat/completions', models: ['llama3.2', 'llama3.1', 'qwen2.5', 'deepseek-r1', 'mistral', 'codellama', 'phi3'], description: '本地运行，无需 API Key' },
   { id: 'deepseek', name: 'DeepSeek', endpoint: 'https://api.deepseek.com/v1/chat/completions', models: ['deepseek-chat', 'deepseek-coder', 'deepseek-reasoner'], description: '国产大模型，性价比高' },
@@ -66,10 +67,15 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
 
   useEffect(() => {
     setLocalConfig(aiConfig)
-    const matched = AI_PRESETS.find(p => 
-      p.endpoint && aiConfig.endpoint.includes(p.endpoint.replace('/chat/completions', ''))
-    )
-    setSelectedPreset(matched?.id || 'custom')
+    // 如果使用内置 AI 或者没有配置，默认选中内置
+    if (aiConfig.useBuiltIn || (!aiConfig.endpoint && !aiConfig.apiKey)) {
+      setSelectedPreset('builtin')
+    } else {
+      const matched = AI_PRESETS.find(p => 
+        p.endpoint && aiConfig.endpoint.includes(p.endpoint.replace('/chat/completions', ''))
+      )
+      setSelectedPreset(matched?.id || 'custom')
+    }
   }, [aiConfig])
 
   useEffect(() => {
@@ -82,12 +88,28 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     setSelectedPreset(presetId)
     setShowPresetDropdown(false)
     const preset = AI_PRESETS.find(p => p.id === presetId)
-    if (preset && preset.endpoint) {
-      setLocalConfig({
-        ...localConfig,
-        endpoint: preset.endpoint,
-        model: preset.models[0] || ''
-      })
+    if (preset) {
+      if ((preset as any).isBuiltIn) {
+        // 使用内置 AI
+        setLocalConfig({
+          endpoint: '',
+          apiKey: '',
+          model: '',
+          useBuiltIn: true
+        })
+      } else if (preset.endpoint) {
+        setLocalConfig({
+          ...localConfig,
+          endpoint: preset.endpoint,
+          model: preset.models[0] || '',
+          useBuiltIn: false
+        })
+      } else {
+        setLocalConfig({
+          ...localConfig,
+          useBuiltIn: false
+        })
+      }
     }
   }
 
@@ -249,12 +271,12 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
           {activeSection === 'ai' && (
             <div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">AI 助手配置</h3>
-              <p className="text-sm text-gray-600 mb-6">配置 AI 助手使用的模型和 API</p>
+              <p className="text-sm text-gray-600 mb-6">选择 AI 服务</p>
               
               <div className="space-y-5">
                 {/* 服务商选择 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">AI 服务商</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">AI 服务</label>
                   <div className="relative">
                     <button
                       onClick={() => setShowPresetDropdown(!showPresetDropdown)}
@@ -273,15 +295,18 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                           <button
                             key={preset.id}
                             onClick={() => handlePresetSelect(preset.id)}
-                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 text-left"
+                            className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 text-left ${(preset as any).isBuiltIn ? 'bg-green-50' : ''}`}
                           >
                             <div className="w-5 flex items-center justify-center">
                               {selectedPreset === preset.id && <Check size={14} className="text-blue-500" />}
                             </div>
-                            <div>
+                            <div className="flex-1">
                               <div className="font-semibold text-gray-900">{preset.name}</div>
                               <div className="text-sm text-gray-600">{preset.description}</div>
                             </div>
+                            {(preset as any).isBuiltIn && (
+                              <span className="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded">推荐</span>
+                            )}
                           </button>
                         ))}
                       </div>
@@ -289,75 +314,211 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                   </div>
                 </div>
 
-                {/* API 地址 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">API 地址</label>
-                  <input
-                    type="text"
-                    value={localConfig.endpoint}
-                    onChange={(e) => setLocalConfig({ ...localConfig, endpoint: e.target.value })}
-                    className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                    placeholder="https://api.example.com/v1/chat/completions"
-                  />
-                </div>
-
-                {/* API Key */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">API Key</label>
-                  <input
-                    type="password"
-                    value={localConfig.apiKey}
-                    onChange={(e) => setLocalConfig({ ...localConfig, apiKey: e.target.value })}
-                    className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-gray-900"
-                    placeholder="sk-..."
-                  />
-                </div>
-
-                {/* 模型选择 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">模型</label>
-                  <div className="relative">
-                    <div className="flex gap-2">
-                      {/* 下拉选择 */}
-                      <button
-                        onClick={() => setShowModelDropdown(!showModelDropdown)}
-                        className="flex-1 flex items-center justify-between px-4 py-3 bg-white border border-gray-300 rounded-lg hover:border-blue-500"
-                      >
-                        <span className="text-gray-900 font-medium truncate">{localConfig.model || '选择模型'}</span>
-                        <ChevronDown size={16} className="text-gray-500 flex-shrink-0" />
-                      </button>
+                {/* 内置 AI 说明 */}
+                {selectedPreset === 'builtin' && (
+                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-center gap-2 text-green-800 font-medium mb-2">
+                      <Check size={16} />
+                      内置 AI 服务
                     </div>
-                    
-                    {showModelDropdown && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl z-10 max-h-64 overflow-auto">
-                        {/* 手动输入选项 */}
-                        <div className="p-2 border-b border-gray-100">
+                    <p className="text-sm text-green-700">
+                      使用内置 AI 服务，无需配置即可直接使用。
+                    </p>
+                  </div>
+                )}
+
+                {/* 自定义配置（非内置时显示） */}
+                {selectedPreset !== 'builtin' && (
+                  <>
+                    {/* API 地址 */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">API 地址</label>
+                      <input
+                        type="text"
+                        value={localConfig.endpoint}
+                        onChange={(e) => setLocalConfig({ ...localConfig, endpoint: e.target.value })}
+                        className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                        placeholder="https://api.example.com/v1/chat/completions"
+                      />
+                    </div>
+
+                    {/* API Key */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">API Key</label>
+                      <input
+                        type="password"
+                        value={localConfig.apiKey}
+                        onChange={(e) => setLocalConfig({ ...localConfig, apiKey: e.target.value })}
+                        className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-gray-900"
+                        placeholder="sk-..."
+                      />
+                    </div>
+
+                    {/* 模型模式选择 */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">模型模式</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        <button
+                          onClick={() => setLocalConfig({ ...localConfig, modelMode: 'dual' })}
+                          className={`px-3 py-2 rounded-lg border text-sm ${
+                            localConfig.modelMode === 'dual' 
+                              ? 'border-blue-500 bg-blue-50 text-blue-700' 
+                              : 'border-gray-300 text-gray-700 hover:border-gray-400'
+                          }`}
+                        >
+                          双模型
+                        </button>
+                        <button
+                          onClick={() => setLocalConfig({ ...localConfig, modelMode: 'single' })}
+                          className={`px-3 py-2 rounded-lg border text-sm ${
+                            localConfig.modelMode === 'single' 
+                              ? 'border-blue-500 bg-blue-50 text-blue-700' 
+                              : 'border-gray-300 text-gray-700 hover:border-gray-400'
+                          }`}
+                        >
+                          单模型
+                        </button>
+                        <button
+                          onClick={() => setLocalConfig({ ...localConfig, modelMode: 'tool-only' })}
+                          className={`px-3 py-2 rounded-lg border text-sm ${
+                            (localConfig.modelMode === 'tool-only' || !localConfig.modelMode)
+                              ? 'border-blue-500 bg-blue-50 text-blue-700' 
+                              : 'border-gray-300 text-gray-700 hover:border-gray-400'
+                          }`}
+                        >
+                          仅工具
+                        </button>
+                      </div>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {localConfig.modelMode === 'dual' && '视觉模型分析页面 + 工具模型执行操作（推荐）'}
+                        {localConfig.modelMode === 'single' && '单个模型同时具备视觉和工具调用能力'}
+                        {(localConfig.modelMode === 'tool-only' || !localConfig.modelMode) && '仅使用工具模型，不分析页面截图'}
+                      </p>
+                    </div>
+
+                    {/* 工具模型选择 */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {localConfig.modelMode === 'dual' ? '工具模型' : '模型'}
+                      </label>
+                      <div className="relative">
+                        <div className="flex gap-2">
+                          {/* 下拉选择 */}
+                          <button
+                            onClick={() => setShowModelDropdown(!showModelDropdown)}
+                            className="flex-1 flex items-center justify-between px-4 py-3 bg-white border border-gray-300 rounded-lg hover:border-blue-500"
+                          >
+                            <span className="text-gray-900 font-medium truncate">{localConfig.model || '选择模型'}</span>
+                            <ChevronDown size={16} className="text-gray-500 flex-shrink-0" />
+                          </button>
+                        </div>
+                        
+                        {showModelDropdown && (
+                          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl z-10 max-h-64 overflow-auto">
+                            {/* 手动输入选项 */}
+                            <div className="p-2 border-b border-gray-100">
+                              <input
+                                type="text"
+                                value={localConfig.model}
+                                onChange={(e) => setLocalConfig({ ...localConfig, model: e.target.value })}
+                                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="输入自定义模型名..."
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            </div>
+                            {/* 预设模型列表 */}
+                            {currentPreset.models.map((model) => (
+                              <button
+                                key={model}
+                                onClick={() => handleModelSelect(model)}
+                                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-left"
+                              >
+                                <div className="w-5 flex items-center justify-center">
+                                  {localConfig.model === model && <Check size={14} className="text-blue-500" />}
+                                </div>
+                                <span className="text-gray-800 text-sm">{model}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 视觉模型配置（仅双模型模式显示） */}
+                    {localConfig.modelMode === 'dual' && (
+                      <div className="space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <label className="text-sm font-medium text-gray-700">视觉模型配置</label>
+                          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={!!(localConfig.visionEndpoint)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  // 勾选时，设置默认的 SiliconFlow 地址
+                                  setLocalConfig({ 
+                                    ...localConfig, 
+                                    visionEndpoint: 'https://api.siliconflow.cn/v1/chat/completions',
+                                    visionApiKey: '' 
+                                  })
+                                } else {
+                                  // 取消勾选时，清空独立配置
+                                  setLocalConfig({ ...localConfig, visionEndpoint: '', visionApiKey: '' })
+                                }
+                              }}
+                              className="w-4 h-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+                            />
+                            使用独立服务商
+                          </label>
+                        </div>
+                        
+                        {/* 独立服务商配置 */}
+                        {localConfig.visionEndpoint ? (
+                          <>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">视觉模型 API 地址</label>
+                              <input
+                                type="text"
+                                value={localConfig.visionEndpoint || ''}
+                                onChange={(e) => setLocalConfig({ ...localConfig, visionEndpoint: e.target.value })}
+                                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 text-sm"
+                                placeholder="https://api.siliconflow.cn/v1/chat/completions"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">视觉模型 API Key</label>
+                              <input
+                                type="password"
+                                value={localConfig.visionApiKey || ''}
+                                onChange={(e) => setLocalConfig({ ...localConfig, visionApiKey: e.target.value })}
+                                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 text-sm font-mono"
+                                placeholder="sk-..."
+                              />
+                            </div>
+                          </>
+                        ) : (
+                          <p className="text-xs text-gray-500">
+                            默认使用工具模型的 API 地址和 Key
+                          </p>
+                        )}
+                        
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">视觉模型名称</label>
                           <input
                             type="text"
-                            value={localConfig.model}
-                            onChange={(e) => setLocalConfig({ ...localConfig, model: e.target.value })}
-                            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            placeholder="输入自定义模型名..."
-                            onClick={(e) => e.stopPropagation()}
+                            value={localConfig.visionModel || ''}
+                            onChange={(e) => setLocalConfig({ ...localConfig, visionModel: e.target.value })}
+                            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 text-sm"
+                            placeholder="如 deepseek-ai/DeepSeek-OCR, gpt-4-vision-preview"
                           />
+                          <p className="mt-1 text-xs text-gray-500">
+                            用于分析页面截图，提供更准确的操作上下文
+                          </p>
                         </div>
-                        {/* 预设模型列表 */}
-                        {currentPreset.models.map((model) => (
-                          <button
-                            key={model}
-                            onClick={() => handleModelSelect(model)}
-                            className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-left"
-                          >
-                            <div className="w-5 flex items-center justify-center">
-                              {localConfig.model === model && <Check size={14} className="text-blue-500" />}
-                            </div>
-                            <span className="text-gray-800 text-sm">{model}</span>
-                          </button>
-                        ))}
                       </div>
                     )}
-                  </div>
-                </div>
+                  </>
+                )}
 
                 {/* 保存按钮 */}
                 <button

@@ -63,9 +63,17 @@ export interface ChatSession {
 }
 
 export interface AIConfig {
+  // 工具模型配置
   endpoint: string
   apiKey: string
   model: string
+  // 视觉模型配置（可选，双模型模式时使用）
+  visionEndpoint?: string   // 视觉模型 API 地址（留空则使用工具模型的地址）
+  visionApiKey?: string     // 视觉模型 API Key（留空则使用工具模型的 Key）
+  visionModel?: string      // 视觉模型名称
+  // 模式设置
+  useBuiltIn?: boolean      // 使用内置 AI 服务
+  modelMode?: 'dual' | 'single' | 'tool-only'  // dual=双模型, single=单模型, tool-only=仅工具模型
 }
 
 export interface SavedAIConfig extends AIConfig {
@@ -81,6 +89,10 @@ export interface MouseState {
   clicking: boolean
   clickId: number  // 用于触发点击动画
   duration: number // 移动动画时长
+  mode: 'normal' | 'fidget' | 'panic'  // 行为模式：正常/思考乱动/紧张乱动
+  fidgetIntensity: number  // 乱动强度 0-1
+  baseX: number  // 乱动时的基准位置
+  baseY: number
 }
 
 // 搜索引擎配置
@@ -159,6 +171,7 @@ interface AppState {
   messages: Message[]
   isAILoading: boolean
   aiStopRequested: boolean
+  currentModelType: 'tool' | 'vision' | null  // 当前正在调用的模型类型
   chatSessions: ChatSession[]
   currentSessionId: string | null
   
@@ -210,6 +223,7 @@ interface AppState {
   updateLastMessageWithToolCalls: (content: string, toolCalls: Array<{ name: string; arguments: object; result?: string }>) => void
   clearMessages: () => void
   setAILoading: (loading: boolean) => void
+  setCurrentModelType: (type: 'tool' | 'vision' | null) => void
   stopAI: () => void
   resetAIStop: () => void
   
@@ -237,6 +251,9 @@ interface AppState {
   hideMouse: () => void
   moveMouse: (x: number, y: number, duration?: number) => void
   clickMouse: () => void
+  fidgetMouse: (intensity?: number) => void  // 思考时微微乱动
+  panicMouse: (duration?: number) => void    // 出错时紧张乱动
+  stopFidget: () => void                      // 停止乱动
   
   // 浏览器设置
   setBrowserSettings: (settings: Partial<BrowserSettings>, navigateToHomepage?: boolean) => void
@@ -275,12 +292,14 @@ export const useStore = create<AppState>((set, get) => ({
   messages: [],
   isAILoading: false,
   aiStopRequested: false,
+  currentModelType: null,
   chatSessions: [],
   currentSessionId: null,
   aiConfig: {
-    endpoint: 'https://api.openai.com/v1/chat/completions',
+    endpoint: '',
     apiKey: '',
-    model: 'gpt-4'
+    model: '',
+    useBuiltIn: true  // 默认使用内置 AI
   },
   savedConfigs: [],
   mouseState: {
@@ -289,7 +308,11 @@ export const useStore = create<AppState>((set, get) => ({
     y: 0,
     clicking: false,
     clickId: 0,
-    duration: 300
+    duration: 300,
+    mode: 'normal' as const,
+    fidgetIntensity: 0,
+    baseX: 0,
+    baseY: 0
   },
   downloadedImages: [],
   elementSelectionRequest: null,
@@ -516,10 +539,12 @@ export const useStore = create<AppState>((set, get) => ({
   },
   
   setAILoading: (isAILoading) => set({ isAILoading }),
-  
-  stopAI: () => set({ aiStopRequested: true, isAILoading: false }),
-  
-  resetAIStop: () => set({ aiStopRequested: false }),
+
+  setCurrentModelType: (currentModelType) => set({ currentModelType }),
+
+  stopAI: () => set({ aiStopRequested: true, isAILoading: false, currentModelType: null }),
+
+  resetAIStop: () => set({ aiStopRequested: false, currentModelType: null }),
   
   // 聊天会话管理
   newChatSession: () => {
@@ -712,6 +737,46 @@ export const useStore = create<AppState>((set, get) => ({
       ...state.mouseState, 
       clicking: true, 
       clickId: state.mouseState.clickId + 1 
+    }
+  })),
+
+  // 思考时微微乱动
+  fidgetMouse: (intensity = 0.3) => set((state) => ({
+    mouseState: { 
+      ...state.mouseState, 
+      mode: 'fidget' as const,
+      fidgetIntensity: intensity,
+      baseX: state.mouseState.x,
+      baseY: state.mouseState.y
+    }
+  })),
+
+  // 出错时紧张乱动
+  panicMouse: (duration = 1500) => {
+    set((state) => ({
+      mouseState: { 
+        ...state.mouseState, 
+        mode: 'panic' as const,
+        fidgetIntensity: 1,
+        baseX: state.mouseState.x,
+        baseY: state.mouseState.y
+      }
+    }))
+    // 自动停止
+    setTimeout(() => {
+      const currentMode = get().mouseState.mode
+      if (currentMode === 'panic') {
+        get().stopFidget()
+      }
+    }, duration)
+  },
+
+  // 停止乱动
+  stopFidget: () => set((state) => ({
+    mouseState: { 
+      ...state.mouseState, 
+      mode: 'normal' as const,
+      fidgetIntensity: 0
     }
   })),
 

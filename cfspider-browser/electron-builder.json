@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
   "appId": "com.cfspider.browser",
-  "productName": "cfspider-智能浏览器",
+  "productName": "CFspider-Browser",
   "directories": {
     "output": "release",
     "buildResources": "build"
