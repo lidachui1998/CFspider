@@ -53,6 +53,7 @@
   "build": {
     "appId": "com.cfspider.browser",
     "productName": "cfspider-智能浏览器",
+    "publish": null,
     "directories": {
       "output": "release"
     },
