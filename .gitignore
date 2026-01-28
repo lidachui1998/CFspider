@@ -15,6 +15,8 @@ edgetunnel_proxy.py
 test.py
 test_*.py
 *.html
+!cfspider-browser/index.html
+!api-docs/**/*.html
 
 # ========================================
 # 机密文件 - 绝对不上传 GitHub
