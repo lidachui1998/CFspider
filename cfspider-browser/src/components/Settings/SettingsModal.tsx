@@ -17,6 +17,8 @@ const COMMON_MODELS = [
 const AI_PRESETS = [
   { id: 'builtin', name: '内置 AI', endpoint: '', models: [], description: '开箱即用，无需配置', isBuiltIn: true },
   { id: 'custom', name: '自定义', endpoint: '', models: COMMON_MODELS, description: '自定义 API 地址，可选择常用模型' },
+  { id: 'github', name: 'GitHub Models', endpoint: 'https://models.github.ai/inference/chat/completions', models: ['deepseek/DeepSeek-V3-0324', 'openai/gpt-4o', 'openai/gpt-4o-mini', 'meta/llama-3.3-70b-instruct', 'mistral-ai/mistral-large-2411'], description: '使用 GitHub PAT，免费额度' },
+  { id: 'nvidia', name: 'NVIDIA NIM', endpoint: 'https://integrate.api.nvidia.com/v1/chat/completions', models: ['deepseek-ai/deepseek-v3.2', 'moonshotai/kimi-k2.5', 'deepseek-ai/deepseek-r1', 'meta/llama-3.3-70b-instruct', 'nvidia/llama-3.1-nemotron-70b-instruct', 'mistralai/mistral-large-2-instruct'], description: 'NVIDIA 模型平台，免费试用' },
   { id: 'ollama', name: 'Ollama', endpoint: 'http://localhost:11434/v1/chat/completions', models: ['llama3.2', 'llama3.1', 'qwen2.5', 'deepseek-r1', 'mistral', 'codellama', 'phi3'], description: '本地运行，无需 API Key' },
   { id: 'deepseek', name: 'DeepSeek', endpoint: 'https://api.deepseek.com/v1/chat/completions', models: ['deepseek-chat', 'deepseek-coder', 'deepseek-reasoner'], description: '国产大模型，性价比高' },
   { id: 'openai', name: 'OpenAI', endpoint: 'https://api.openai.com/v1/chat/completions', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo', 'o1-preview', 'o1-mini'], description: 'ChatGPT 官方 API' },

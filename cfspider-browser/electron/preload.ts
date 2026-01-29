@@ -68,6 +68,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   downloadImage: (url: string, filename: string) => ipcRenderer.invoke('download:image', url, filename),
   openDownloadFolder: () => ipcRenderer.invoke('download:openFolder'),
 
+  // 学习记忆
+  loadLearningMemory: () => ipcRenderer.invoke('learning-memory:load'),
+  saveLearningMemory: (memories: object[]) => ipcRenderer.invoke('learning-memory:save', memories),
+
+  // 聊天会话
+  loadChatSessions: () => ipcRenderer.invoke('chat-sessions:load'),
+  saveChatSessions: (sessions: object[]) => ipcRenderer.invoke('chat-sessions:save', sessions),
+
   // 快捷键事件
   onToggleDevtools: (callback: () => void) => {
     ipcRenderer.on('toggle-devtools', () => callback())
@@ -132,6 +140,10 @@ declare global {
       saveHistory: (history: object[]) => Promise<boolean>
       downloadImage: (url: string, filename: string) => Promise<{ success: boolean; filename?: string; path?: string; error?: string }>
       openDownloadFolder: () => Promise<boolean>
+      loadLearningMemory: () => Promise<object[]>
+      saveLearningMemory: (memories: object[]) => Promise<boolean>
+      loadChatSessions: () => Promise<object[]>
+      saveChatSessions: (sessions: object[]) => Promise<boolean>
       onToggleDevtools: (callback: () => void) => void
       onReloadWebview: (callback: () => void) => void
       onNavigateBack: (callback: () => void) => void

@@ -1091,7 +1091,7 @@ export default function Browser({ onSettingsClick }: BrowserProps) {
               partition="persist:cfspider"
               // @ts-ignore - webview attribute
               allowpopups="true"
-              useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+              useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gray-50">

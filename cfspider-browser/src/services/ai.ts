@@ -54,6 +54,401 @@ function getRandomPanicReaction(): string {
   return PANIC_REACTIONS[Math.floor(Math.random() * PANIC_REACTIONS.length)]
 }
 
+// ========== 错误记忆系统 ==========
+// 记录点击失败的元素，避免重复点击
+interface ClickErrorRecord {
+  selector: string       // 元素选择器
+  text: string          // 元素文本
+  url: string           // 页面 URL
+  reason: string        // 失败原因
+  timestamp: number     // 记录时间
+  attempts: number      // 尝试次数
+}
+
+// 错误记忆存储（会话级别）
+const clickErrorMemory: ClickErrorRecord[] = []
+
+// 记录一个点击错误
+function recordClickError(selector: string, text: string, url: string, reason: string): void {
+  // 先清理过期记录
+  clearExpiredErrorMemory()
+  
+  const existing = clickErrorMemory.find(e => e.selector === selector && e.url === url)
+  if (existing) {
+    existing.attempts++
+    existing.timestamp = Date.now()
+    existing.reason = reason
+  } else {
+    clickErrorMemory.push({
+      selector,
+      text,
+      url,
+      reason,
+      timestamp: Date.now(),
+      attempts: 1
+    })
+  }
+  // 只保留最近 50 条记录
+  if (clickErrorMemory.length > 50) {
+    clickErrorMemory.shift()
+  }
+  console.log('[CFSpider] Recorded click error:', { selector, text, reason, attempts: existing?.attempts || 1 })
+}
+
+// 检查元素是否在错误记录中
+function isKnownBadElement(selector: string, text: string, url: string): ClickErrorRecord | null {
+  return clickErrorMemory.find(e => 
+    (e.selector === selector || e.text.toLowerCase() === text.toLowerCase()) && 
+    e.url === url &&
+    e.attempts >= 1
+  ) || null
+}
+
+// 获取当前页面的所有错误记录（用于 AI 决策）
+function getPageErrorHistory(url: string): string[] {
+  return clickErrorMemory
+    .filter(e => e.url === url)
+    .map(e => `- 已尝试失败 ${e.attempts} 次: "${e.text}" (${e.reason})`)
+}
+
+// 清除过期的错误记忆（30分钟后自动过期）
+function clearExpiredErrorMemory(): void {
+  const now = Date.now()
+  const expireTime = 30 * 60 * 1000 // 30 分钟
+  const before = clickErrorMemory.length
+  
+  // 过滤掉过期的记录
+  const valid = clickErrorMemory.filter(e => now - e.timestamp < expireTime)
+  clickErrorMemory.length = 0
+  clickErrorMemory.push(...valid)
+  
+  if (before !== clickErrorMemory.length) {
+    console.log('[CFSpider] Cleared expired error memory:', before - clickErrorMemory.length)
+  }
+}
+
+
+// ========== 仿人类学习记忆系统 ==========
+// 像真人一样学习：错误不再犯，正确的更熟练，有时会遗忘
+
+interface LearningMemory {
+  id: string
+  type: 'success' | 'error' | 'tip'  // 成功经验、失败教训、操作技巧
+  domain: string           // 网站域名（如 github.com, bing.com）
+  action: string           // 操作类型（click, input, navigate, scroll）
+  target: string           // 目标描述（如"搜索按钮"、"登录链接"）
+  selector?: string        // 可选的选择器
+  lesson: string           // 学到的经验/教训
+  strength: number         // 记忆强度 0-100（决定遗忘概率）
+  lastRecall: number       // 上次回忆/使用时间
+  createdAt: number        // 创建时间
+  recallCount: number      // 成功使用次数（强化记忆）
+  emotional: boolean       // 是否有情绪标记（更难忘记）
+}
+
+// 遗忘时的反应语
+const FORGET_REACTIONS = [
+  '我靠，我忘记了...',
+  '等等，让我想想...',
+  '我记得明明是...',
+  '奇怪，我之前好像知道的...',
+  '糟糕，想不起来了...',
+  '唔...这个我之前遇到过...',
+  '嗯？我有印象但是...',
+]
+
+// 回忆起来时的反应
+const RECALL_REACTIONS = [
+  '对了！我想起来了！',
+  '哦~上次就是这样搞定的！',
+  '这个我熟！',
+  '没问题，我记得怎么做',
+  '这我有经验~',
+]
+
+// 学习成功时的反应
+const LEARN_REACTIONS = [
+  '记住了！',
+  '下次就知道了~',
+  '学到了学到了',
+  '原来是这样啊',
+  '记下了！',
+]
+
+// 内存中的学习记忆缓存
+let learningMemoryCache: LearningMemory[] = []
+let memoryLoaded = false
+let pendingSaves: LearningMemory[] = []  // 待保存队列
+
+// 生成记忆ID
+function generateMemoryId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+}
+
+// 计算记忆强度衰减（模拟遗忘曲线）
+function calculateStrengthDecay(memory: LearningMemory): number {
+  const now = Date.now()
+  const daysSinceLastRecall = (now - memory.lastRecall) / (1000 * 60 * 60 * 24)
+  const daysSinceCreated = (now - memory.createdAt) / (1000 * 60 * 60 * 24)
+  
+  // 基础衰减：每天 -3 到 -8 点（随机）
+  let decay = daysSinceLastRecall * (3 + Math.random() * 5)
+  
+  // 情绪记忆衰减更慢
+  if (memory.emotional) {
+    decay *= 0.5
+  }
+  
+  // 使用次数多的记忆更稳固
+  decay *= Math.max(0.3, 1 - memory.recallCount * 0.1)
+  
+  // 错误类型的记忆更难忘（教训深刻）
+  if (memory.type === 'error') {
+    decay *= 0.6
+  }
+  
+  // 老记忆如果还在，说明很重要，衰减更慢
+  if (daysSinceCreated > 7) {
+    decay *= 0.7
+  }
+  
+  return Math.max(0, memory.strength - decay)
+}
+
+// 检查记忆是否"遗忘"了（强度低于阈值有概率遗忘）
+function isMemoryForgotten(memory: LearningMemory): boolean {
+  const currentStrength = calculateStrengthDecay(memory)
+  
+  // 强度 > 60：不会忘
+  if (currentStrength > 60) return false
+  
+  // 强度 30-60：小概率遗忘
+  if (currentStrength > 30) {
+    return Math.random() < 0.1 * (1 - currentStrength / 60)
+  }
+  
+  // 强度 10-30：较大概率遗忘
+  if (currentStrength > 10) {
+    return Math.random() < 0.3
+  }
+  
+  // 强度 < 10：大概率遗忘
+  return Math.random() < 0.6
+}
+
+// 加载持久化的记忆
+async function loadLearningMemory(): Promise<void> {
+  if (memoryLoaded || !isElectron) return
+  
+  try {
+    const memories = await (window as any).electronAPI.loadLearningMemory()
+    if (Array.isArray(memories)) {
+      learningMemoryCache = memories
+      console.log('[CFSpider] Loaded learning memories:', memories.length)
+    }
+    memoryLoaded = true
+  } catch (e) {
+    console.log('[CFSpider] No saved learning memories found')
+    memoryLoaded = true
+  }
+}
+
+// 保存一条记忆到持久化存储（渐进式，每次只保存一点）
+async function saveLearningMemoryIncremental(): Promise<void> {
+  if (!isElectron || pendingSaves.length === 0) return
+  
+  // 随机决定是否保存（30% 概率，模拟"有时候记住，有时候没记住"）
+  if (Math.random() > 0.3) {
+    console.log('[CFSpider] This time did not remember to save... (human-like)')
+    return
+  }
+  
+  // 每次只保存 1-2 条（渐进学习）
+  const saveCount = Math.min(pendingSaves.length, 1 + Math.floor(Math.random() * 2))
+  const toSave = pendingSaves.splice(0, saveCount)
+  
+  try {
+    // 合并到现有记忆
+    const existing = await (window as any).electronAPI.loadLearningMemory() || []
+    const merged = [...existing]
+    
+    for (const mem of toSave) {
+      const idx = merged.findIndex(m => m.id === mem.id)
+      if (idx >= 0) {
+        merged[idx] = mem
+      } else {
+        merged.push(mem)
+      }
+    }
+    
+    // 限制总量（像人脑容量有限）
+    if (merged.length > 200) {
+      // 按强度排序，删除最弱的记忆
+      merged.sort((a, b) => calculateStrengthDecay(b) - calculateStrengthDecay(a))
+      merged.length = 200
+    }
+    
+    await (window as any).electronAPI.saveLearningMemory(merged)
+    console.log('[CFSpider] Saved learning memories:', toSave.length, '- Total:', merged.length)
+  } catch (e) {
+    console.error('[CFSpider] Failed to save learning memory:', e)
+    // 保存失败的放回队列
+    pendingSaves.unshift(...toSave)
+  }
+}
+
+// 创建新记忆
+function createLearningMemory(
+  type: 'success' | 'error' | 'tip',
+  domain: string,
+  action: string,
+  target: string,
+  lesson: string,
+  options?: { selector?: string; emotional?: boolean; initialStrength?: number }
+): LearningMemory {
+  const memory: LearningMemory = {
+    id: generateMemoryId(),
+    type,
+    domain,
+    action,
+    target,
+    selector: options?.selector,
+    lesson,
+    strength: options?.initialStrength ?? (type === 'error' ? 60 : 40), // 错误记忆初始更强
+    lastRecall: Date.now(),
+    createdAt: Date.now(),
+    recallCount: 0,
+    emotional: options?.emotional ?? (type === 'error') // 错误默认带情绪
+  }
+  
+  // 添加到缓存
+  learningMemoryCache.push(memory)
+  
+  // 添加到待保存队列
+  pendingSaves.push(memory)
+  
+  // 触发渐进保存
+  saveLearningMemoryIncremental()
+  
+  return memory
+}
+
+// 记录一次学习（成功/失败经验）
+function learnFromExperience(
+  type: 'success' | 'error',
+  domain: string,
+  action: string,
+  target: string,
+  lesson: string,
+  options?: { selector?: string; emotional?: boolean }
+): string {
+  // 先加载已有记忆
+  loadLearningMemory()
+  
+  // 检查是否已有类似记忆
+  const existing = learningMemoryCache.find(m => 
+    m.domain === domain && 
+    m.action === action && 
+    m.target.toLowerCase().includes(target.toLowerCase().slice(0, 20))
+  )
+  
+  if (existing) {
+    // 强化已有记忆
+    existing.recallCount++
+    existing.lastRecall = Date.now()
+    existing.strength = Math.min(100, existing.strength + (type === 'success' ? 15 : 25))
+    
+    // 如果之前是错误现在成功了，更新类型
+    if (existing.type === 'error' && type === 'success') {
+      existing.type = 'success'
+      existing.lesson = lesson
+      existing.emotional = true // 克服困难，印象深刻
+    }
+    
+    pendingSaves.push(existing)
+    saveLearningMemoryIncremental()
+    
+    return LEARN_REACTIONS[Math.floor(Math.random() * LEARN_REACTIONS.length)]
+  }
+  
+  // 创建新记忆
+  createLearningMemory(type, domain, action, target, lesson, options)
+  
+  return LEARN_REACTIONS[Math.floor(Math.random() * LEARN_REACTIONS.length)]
+}
+
+// 尝试回忆相关经验（用于操作前参考）
+function recallExperience(domain: string, action: string, target: string): {
+  found: boolean
+  memory?: LearningMemory
+  forgotten?: boolean
+  vagueMemory?: string
+  reaction?: string
+} {
+  // 确保加载了记忆
+  loadLearningMemory()
+  
+  // 查找相关记忆
+  const related = learningMemoryCache.filter(m => 
+    (m.domain === domain || m.domain === '*') &&
+    (m.action === action || m.action === '*') &&
+    (target.toLowerCase().includes(m.target.toLowerCase()) || 
+     m.target.toLowerCase().includes(target.toLowerCase().slice(0, 15)))
+  )
+  
+  if (related.length === 0) {
+    return { found: false }
+  }
+  
+  // 按强度排序
+  related.sort((a, b) => calculateStrengthDecay(b) - calculateStrengthDecay(a))
+  const best = related[0]
+  
+  // 检查是否遗忘
+  if (isMemoryForgotten(best)) {
+    // 遗忘了，但可能有模糊记忆
+    const vagueMemory = best.lesson.slice(0, 30) + '...'
+    return {
+      found: true,
+      forgotten: true,
+      vagueMemory,
+      reaction: FORGET_REACTIONS[Math.floor(Math.random() * FORGET_REACTIONS.length)] + 
+                ` 我记得好像是「${vagueMemory}」但不太确定了...`
+    }
+  }
+  
+  // 成功回忆，强化记忆
+  best.recallCount++
+  best.lastRecall = Date.now()
+  best.strength = Math.min(100, best.strength + 5)
+  
+  pendingSaves.push(best)
+  saveLearningMemoryIncremental()
+  
+  return {
+    found: true,
+    memory: best,
+    reaction: RECALL_REACTIONS[Math.floor(Math.random() * RECALL_REACTIONS.length)]
+  }
+}
+
+// 获取某个域名的所有有效经验（用于 AI 决策）
+function getDomainExperiences(domain: string): string[] {
+  loadLearningMemory()
+  
+  const experiences = learningMemoryCache
+    .filter(m => m.domain === domain || m.domain === '*')
+    .filter(m => !isMemoryForgotten(m))
+    .sort((a, b) => calculateStrengthDecay(b) - calculateStrengthDecay(a))
+    .slice(0, 5) // 最多返回5条
+    .map(m => {
+      const prefix = m.type === 'error' ? '[教训]' : m.type === 'tip' ? '[技巧]' : '[经验]'
+      return `${prefix} ${m.action} "${m.target}": ${m.lesson}`
+    })
+  
+  return experiences
+}
+
 // 生成随机偏移（用于瞄准行为）
 function randomOffset(range: number = 30): number {
   return (Math.random() - 0.5) * range
@@ -526,7 +921,7 @@ export const aiTools = [
       parameters: {
         type: 'object',
         properties: {
-          url: { type: 'string', description: 'ONLY search engine URL like https://www.bing.com' }
+          url: { type: 'string', description: 'ONLY search engine URL like https://cn.bing.com' }
         },
         required: ['url']
       }
@@ -1001,6 +1396,10 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
         if (!url.startsWith('http://') && !url.startsWith('https://')) {
           url = 'https://' + url
         }
+        
+        // 清除过期的错误记忆（保留有效记忆，避免返回后重复犯错）
+        clearExpiredErrorMemory()
+        
         store.setUrl(url)
         webview.src = url
         await new Promise(resolve => setTimeout(resolve, 2000))
@@ -1102,6 +1501,37 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
       if (!webview) return 'Error: Cannot access page'
       try {
         const targetText = (args.text as string).replace(/'/g, "\\'")
+        
+        // 检查是否是已知的失败元素
+        const currentPageUrl = await webview.executeJavaScript('window.location.href') as string
+        const knownBad = isKnownBadElement('', args.text as string, currentPageUrl)
+        if (knownBad && knownBad.attempts >= 2) {
+          const errorHistory = getPageErrorHistory(currentPageUrl)
+          return `[警告] 「${args.text}」已经尝试失败 ${knownBad.attempts} 次了！\n原因：${knownBad.reason}\n\n建议换个方式：\n1. 使用 visual_click("${args.text} 官网链接") 视觉精确定位\n2. 直接点击 URL 文本如 click_text("github.com")\n3. 滚动页面找其他链接\n\n[失败记录]\n${errorHistory.join('\n')}`
+        }
+        
+        // 尝试回忆相关经验
+        try {
+          const domain = new URL(currentPageUrl).hostname
+          const recall = recallExperience(domain, 'click', args.text as string)
+          if (recall.found && recall.forgotten) {
+            // 有模糊记忆，提示但继续
+            console.log('[CFSpider] Vague memory:', recall.reaction)
+          } else if (recall.found && recall.memory) {
+            // 清晰记忆
+            if (recall.memory.type === 'error') {
+              // 记得之前失败过
+              return `${recall.reaction}\n之前在这里点击"${args.text}"失败过：${recall.memory.lesson}\n建议换个方式试试~`
+            }
+            console.log('[CFSpider] Clear memory:', recall.memory.lesson)
+          }
+          
+          // 获取该域名的经验供参考
+          const experiences = getDomainExperiences(domain)
+          if (experiences.length > 0) {
+            console.log('[CFSpider] Domain experiences:', experiences)
+          }
+        } catch {}
         
         const result = await webview.executeJavaScript(`
           (function() {
@@ -1249,8 +1679,17 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
             var badSubdomainPrefixes = ['home.', 'my.', 'user.', 'account.', 'login.', 'passport.', 'member.', 'profile.', 'center.', 'i.', 'u.', 'sso.', 'auth.'];
             // Also check for these keywords in the result text
             var badKeywords = ['个人中心', '我的订单', '我的账户', '账户设置', '登录', 'home.', '/home', '个人信息'];
-            // Skip these UI elements (Copilot, navigation tabs, etc.)
-            var badUIElements = ['copilot', 'copilotsearch', 'ai生成', '全部', '视频', '图片', '地图', '资讯', '更多', 'b_scopeList', 'b_header'];
+            // Skip these UI elements (Copilot, navigation tabs, images, etc.)
+            var badUIElements = [
+              'copilot', 'copilotsearch', 'bingcopilot', 'b_sydConvTab', 'sydneyToggle',
+              'ai生成', 'ai搜索', 'bing ai',
+              '全部', '视频', '图片', '地图', '资讯', '更多', 
+              'b_scopeList', 'b_header', 'b_algo_group', 'b_rich',
+              '/images/', 'images/search', 'image.baidu', 'images.google'
+            ];
+            
+            // 山寨/镜像网站黑名单
+            var fakeSiteDomains = ['github-cn.com', 'github.cn', 'gitee.io', 'jd-cn.com', 'taobao-cn.com'];
             
             // Helper to check if text contains bad subdomain (only if user doesn't want personal page)
             function containsBadSubdomain(text) {
@@ -1311,9 +1750,30 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
                         var citeScore = 200 + scoreCiteText(citeText, domainPatterns[j]);
                         
                         // Big bonus for www. or main domain in cite text
-                        if (citeText.indexOf('www.' + domainPatterns[j]) !== -1) {
-                          citeScore += 500;  // Increased bonus
-                          console.log('CFSpider: WWW bonus for:', citeText);
+                        // 修复：同时支持有 www 和没有 www 的主域名
+                        var domain = domainPatterns[j];
+                        var hasWww = citeText.indexOf('www.' + domain) !== -1;
+                        var hasHttpsDomain = citeText.indexOf('https://' + domain) !== -1;
+                        var hasHttpDomain = citeText.indexOf('http://' + domain) !== -1;
+                        var hasDirectDomain = citeText.indexOf(domain) !== -1;
+                        
+                        // 检查是否是主域名（没有子域名前缀）
+                        var isMainDomain = hasWww || hasHttpsDomain || hasHttpDomain;
+                        if (!isMainDomain && hasDirectDomain) {
+                          // 检查 domain 前面是否有其他子域名
+                          var domainIdx = citeText.indexOf(domain);
+                          if (domainIdx > 0) {
+                            var charBefore = citeText.charAt(domainIdx - 1);
+                            // 如果前面是 / 或空格或者是 https:// 的一部分，说明是主域名
+                            isMainDomain = (charBefore === '/' || charBefore === ' ' || charBefore === ':');
+                          } else {
+                            isMainDomain = true; // 开头就是域名
+                          }
+                        }
+                        
+                        if (isMainDomain) {
+                          citeScore += 500;  // 主域名大奖励
+                          console.log('CFSpider: Main domain bonus for:', citeText);
                         }
                         
                         // Bonus for official keywords
@@ -1484,6 +1944,29 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
               var hrefLower = (c.href || '').toLowerCase();
               var textLower = (c.text || '').toLowerCase();
               
+              // CRITICAL: Strict Copilot filter - check multiple patterns
+              var copilotPatterns = ['copilot', 'sydney', 'b_sydconv', 'bingai', '/chat', 'copilotsearch'];
+              for (var k = 0; k < copilotPatterns.length; k++) {
+                if (hrefLower.indexOf(copilotPatterns[k]) !== -1) {
+                  console.log('CFSpider: FILTERED OUT Copilot link:', hrefLower.slice(0, 80));
+                  return false;
+                }
+              }
+              
+              // Filter out image search links
+              if (hrefLower.indexOf('/images/') !== -1 || hrefLower.indexOf('images/search') !== -1) {
+                console.log('CFSpider: FILTERED OUT image search link:', hrefLower.slice(0, 80));
+                return false;
+              }
+              
+              // Filter out fake sites
+              for (var k = 0; k < fakeSiteDomains.length; k++) {
+                if (hrefLower.indexOf(fakeSiteDomains[k]) !== -1 || textLower.indexOf(fakeSiteDomains[k]) !== -1) {
+                  console.log('CFSpider: FILTERED OUT fake site:', fakeSiteDomains[k]);
+                  return false;
+                }
+              }
+              
               // CRITICAL: Filter out Copilot and other bad UI elements
               for (var k = 0; k < badUIElements.length; k++) {
                 if (hrefLower.indexOf(badUIElements[k]) !== -1) {
@@ -1544,12 +2027,37 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
             });
             
             if (candidates.length > 0) {
-              // Final verification: skip any result that looks like a personal/account page
+              // Final verification: skip any result that looks like a personal/account page or Copilot
               var best = null;
               for (var i = 0; i < candidates.length; i++) {
                 var c = candidates[i];
                 var cText = (c.text || '').toLowerCase();
                 var cHref = (c.href || '').toLowerCase();
+                
+                // CRITICAL: Skip Copilot and AI-related links
+                if (cHref.indexOf('copilot') !== -1 || cHref.indexOf('sydneycon') !== -1 ||
+                    cHref.indexOf('bingai') !== -1 || cHref.indexOf('/chat') !== -1 ||
+                    cHref.indexOf('sydney') !== -1 || cHref.indexOf('b_sydConv') !== -1) {
+                  console.log('CFSpider: Final filter - skipping Copilot/AI link:', cHref.slice(0, 60));
+                  continue;
+                }
+                
+                // Skip image search results
+                if (cHref.indexOf('/images/') !== -1 || cHref.indexOf('images/search') !== -1) {
+                  console.log('CFSpider: Final filter - skipping image search link:', cHref.slice(0, 60));
+                  continue;
+                }
+                
+                // Skip fake/mirror sites
+                var isFakeSite = false;
+                for (var j = 0; j < fakeSiteDomains.length; j++) {
+                  if (cHref.indexOf(fakeSiteDomains[j]) !== -1 || cText.indexOf(fakeSiteDomains[j]) !== -1) {
+                    console.log('CFSpider: Final filter - skipping fake site:', fakeSiteDomains[j]);
+                    isFakeSite = true;
+                    break;
+                  }
+                }
+                if (isFakeSite) continue;
                 
                 // Skip if not wanting personal page but result seems like one
                 if (!wantsPersonalPage) {
@@ -1636,7 +2144,20 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
           // 视觉定位也失败
           store.panicMouse(1500)
           const reaction = getRandomPanicReaction()
-          return `${reaction}\n找不到「${args.text}」。${visualResult.suggestion || '可以试试 visual_click 或 scroll_page 滚动查看。'}`
+          
+          // 记录查找失败
+          const failUrl = await webview.executeJavaScript('window.location.href') as string
+          recordClickError(
+            'not-found', 
+            args.text as string, 
+            failUrl,
+            'DOM和视觉定位都未找到该元素'
+          )
+          
+          const errorHistory = getPageErrorHistory(failUrl)
+          const historyHint = errorHistory.length > 1 ? `\n\n[该页面尝试失败记录]\n${errorHistory.join('\n')}` : ''
+          
+          return `${reaction}\n找不到「${args.text}」。${visualResult.suggestion || '可以试试 visual_click 或 scroll_page 滚动查看。'}${historyHint}`
         }
         
         console.log('click_text found:', result.href)
@@ -1705,19 +2226,71 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
           // 检查是否误跳转到 Copilot 或其他错误页面
           const isCopilotPage = newUrl.includes('copilot') || newUrl.includes('copilotsearch')
           const isSearchPage = newUrl.includes('bing.com/search') || newUrl.includes('google.com/search') || newUrl.includes('baidu.com/s')
+          const isImageSearchPage = newUrl.includes('/images/') || newUrl.includes('image.baidu') || newUrl.includes('images.google')
+          
+          // 检查是否误入山寨/镜像网站
+          const fakeDomains = ['github-cn.com', 'github.cn', 'gitee.io', 'github.io']
+          const isFakeSite = fakeDomains.some(d => newUrl.includes(d))
+          
+          if (isImageSearchPage) {
+            // 误入图片搜索页面
+            store.panicMouse(1200)
+            const reaction = getRandomPanicReaction()
+            return `${reaction}\n误入了图片搜索页面！这里显示的是图片结果，不是网站链接。请用 go_back() 返回，然后点击正确的搜索结果链接。`
+          }
+          
+          if (isFakeSite) {
+            // 误入山寨网站
+            store.panicMouse(1500)
+            const reaction = getRandomPanicReaction()
+            return `${reaction}\n误入了山寨/镜像网站（${newUrl.slice(0, 50)}）！这不是官方网站。请用 go_back() 返回，重新寻找正确的官网链接。`
+          }
           
           if (isCopilotPage) {
             // 误跳转到 Copilot，报告错误让AI自行判断
             store.panicMouse(1500)
             const reaction = getRandomPanicReaction()
             
-            return `${reaction}\n点击错误！误跳转到了 Copilot/AI 页面（${newState.url.slice(0, 60)}）。这不是「${args.text}」的官网。你可以：返回上一页重试、使用 visual_click 精确定位、或滚动页面找其他链接。`
+            // 记录错误到记忆系统，下次避免点击
+            const currentUrl = await webview.executeJavaScript('window.location.href') as string
+            recordClickError(
+              'copilot-link', 
+              args.text as string, 
+              currentUrl,
+              '误跳转到 Copilot/AI 页面'
+            )
+            
+            // 学习教训：记住这个错误
+            try {
+              const domain = new URL(currentUrl).hostname
+              const learnReaction = learnFromExperience('error', domain, 'click', args.text as string,
+                `在搜索结果中点击"${args.text}"会跳到Copilot，应该用visual_click或找URL链接`)
+              console.log('[CFSpider] Learning:', learnReaction)
+            } catch {}
+            
+            // 获取该页面的错误历史
+            const errorHistory = getPageErrorHistory(currentUrl)
+            const historyHint = errorHistory.length > 0 ? `\n\n[已知失败记录]\n${errorHistory.join('\n')}` : ''
+            
+            return `${reaction}\n点击错误！误跳转到了 Copilot/AI 页面（${newState.url.slice(0, 60)}）。这不是「${args.text}」的官网。你可以：返回上一页重试、使用 visual_click 精确定位、或滚动页面找其他链接。${historyHint}`
           }
           
           // 如果还在搜索页面，可能点击没有成功
           if (isSearchPage && !newTitle.includes(targetText)) {
             store.panicMouse(1200)
-            return `${getRandomPanicReaction()}\n点击可能没有成功，还在搜索页面。试试 visual_click("${args.text} 官网链接") 或滚动页面查看。`
+            
+            // 记录点击失败
+            recordClickError(
+              'search-result', 
+              args.text as string, 
+              newState.url,
+              '点击后仍停留在搜索页面'
+            )
+            
+            const errorHistory = getPageErrorHistory(newState.url)
+            const historyHint = errorHistory.length > 0 ? `\n\n[已尝试失败的元素]\n${errorHistory.join('\n')}` : ''
+            
+            return `${getRandomPanicReaction()}\n点击可能没有成功，还在搜索页面。试试 visual_click("${args.text} 官网链接") 或滚动页面查看。${historyHint}`
           }
           
           const titleContainsTarget = newTitle.includes(targetText)
@@ -1728,6 +2301,13 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
           store.setCurrentModelType(null)
           
           if (titleContainsTarget || (!isSearchPage && !isCopilotPage)) {
+            // 学习成功经验
+            try {
+              const domain = new URL(newState.url).hostname
+              learnFromExperience('success', domain, 'click', args.text as string, 
+                `点击"${args.text}"可以到达${newState.title}`)
+            } catch {}
+            
             return `点击成功~「${args.text}」\n当前页面: ${newState.title}\n${visualFeedback ? '页面状态: ' + visualFeedback : ''}`
           } else {
             return `已点击「${args.text}」，页面可能还在加载...\n当前URL: ${newState.url.slice(0, 50)}\n${visualFeedback ? '当前看到: ' + visualFeedback : ''}`
@@ -3955,9 +4535,9 @@ const systemPrompt = `你是 CFspider 智能浏览器自动化助手，由 viole
 当需要执行操作时，你必须使用 function call / tool_call 实际调用工具，而不是用文字描述。
 
 错误示例（只描述，没有调用）：
-- "输入: 女装" ❌
-- "我将在搜索框中输入关键词" ❌
-- "[调用 input_text]" ❌
+- "输入: 女装" [错误]
+- "我将在搜索框中输入关键词" [错误]
+- "[调用 input_text]" [错误]
 
 正确做法：
 - 实际发起 tool_call 调用 input_text 函数 ✓
@@ -4000,7 +4580,7 @@ const systemPrompt = `你是 CFspider 智能浏览器自动化助手，由 viole
 用户："打开淘宝"
 
 你："好的呀~ 让我看看现在在哪个页面... 当前不在搜索引擎，我先跳转一下"
-[调用 navigate_to，url="https://www.bing.com"]
+[调用 navigate_to，url="https://cn.bing.com"]
 
 你："到必应了，搜索淘宝~"
 [调用 input_text，text="淘宝"]
@@ -4008,7 +4588,7 @@ const systemPrompt = `你是 CFspider 智能浏览器自动化助手，由 viole
 ## 导航规则
 
 navigate_to 只能导航到搜索引擎：
-- https://www.bing.com（首选）
+- https://cn.bing.com（首选，国内版无广告）
 - https://www.baidu.com
 - https://www.google.com
 
@@ -4057,6 +4637,41 @@ navigate_to 只能导航到搜索引擎：
 - 使用 get_page_info() 在决定做什么之前检查当前状态
 
 示例：如果历史显示你已经点击了"京东"并且现在在 jd.com 上，直接进行下一步（如搜索商品）而不是再次导航到必应。
+
+## 智能学习记忆系统
+
+你拥有像真人一样的学习和记忆能力：
+
+### 学习能力：
+- 操作成功时会学习经验，下次更快更准
+- 操作失败时会记住教训，不再重复犯错
+- 某些深刻的教训会"情绪化记忆"，更难忘记
+
+### 记忆特点：
+- 记忆会随时间衰减（像真人一样会遗忘）
+- 经常使用的技能记得更牢
+- 失败的教训比成功经验更难忘
+- 有时候会"想不起来"，只有模糊记忆
+
+### 遗忘时的表现：
+当记忆模糊时，你可能会说：
+- "我靠，我忘记了..."
+- "我记得明明是..."
+- "这个我有印象但不太确定了..."
+
+### 回忆成功时的表现：
+当成功回忆起经验时：
+- "对了！我想起来了！"
+- "这个我熟！上次就是这样搞定的"
+- "没问题，我记得怎么做"
+
+### 工具返回的提示：
+当看到类似提示时要注意：
+- "[警告] xxx 已经尝试失败 N 次" - 绝对不要再用同样方法
+- "之前在这里点击xxx失败过" - 换个策略
+- "[已知失败记录]" - 参考这些避免重复
+
+**重要**：错误不要再犯，成功的方法要记住多用！
 
 ## 智能搜索切换策略
 

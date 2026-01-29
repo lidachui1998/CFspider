@@ -128,7 +128,7 @@ export interface BrowserSettings {
 
 // 预设搜索引擎
 export const SEARCH_ENGINES: SearchEngine[] = [
-  { id: 'bing', name: 'Bing', url: 'https://www.bing.com/search?q=%s' },
+  { id: 'bing', name: 'Bing', url: 'https://cn.bing.com/search?q=%s' },
   { id: 'google', name: 'Google', url: 'https://www.google.com/search?q=%s' },
   { id: 'baidu', name: '百度', url: 'https://www.baidu.com/s?wd=%s' },
   { id: 'duckduckgo', name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=%s' },
@@ -136,7 +136,7 @@ export const SEARCH_ENGINES: SearchEngine[] = [
 
 // 搜索引擎首页 URL
 export const SEARCH_ENGINE_HOMEPAGES: Record<string, string> = {
-  'bing': 'https://www.bing.com',
+  'bing': 'https://cn.bing.com',
   'google': 'https://www.google.com',
   'baidu': 'https://www.baidu.com',
   'duckduckgo': 'https://duckduckgo.com',
@@ -283,7 +283,7 @@ export const useStore = create<AppState>((set, get) => ({
   selectMode: false,
   browserSettings: {
     searchEngine: 'bing',
-    homepage: 'https://www.bing.com',
+    homepage: 'https://cn.bing.com',
     defaultZoom: 100
   },
   selectedElements: [],
@@ -319,7 +319,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   // 标签页 Actions
   addTab: (url) => {
-    const homepage = SEARCH_ENGINE_HOMEPAGES[get().browserSettings.searchEngine] || 'https://www.bing.com'
+    const homepage = SEARCH_ENGINE_HOMEPAGES[get().browserSettings.searchEngine] || 'https://cn.bing.com'
     const newTab: Tab = {
       id: `tab-${Date.now()}`,
       url: url || homepage,
@@ -809,7 +809,7 @@ export const useStore = create<AppState>((set, get) => ({
         if (settings && typeof settings === 'object') {
           const browserSettings = settings as BrowserSettings
           // 根据搜索引擎设置首页 URL
-          const homepage = SEARCH_ENGINE_HOMEPAGES[browserSettings.searchEngine] || 'https://www.bing.com'
+          const homepage = SEARCH_ENGINE_HOMEPAGES[browserSettings.searchEngine] || 'https://cn.bing.com'
           
           // 同时更新第一个标签页的 URL
           const { tabs } = get()

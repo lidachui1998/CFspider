@@ -114,8 +114,9 @@ app.whenReady().then(() => {
   // 配置 webview 的独立 session（persist: 前缀确保数据持久化到磁盘）
   const webviewSession = session.fromPartition('persist:cfspider')
   
-  // 设置最新版本的 Chrome User-Agent，避免网站兼容性警告
-  const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+  // 设置 Edge 浏览器的 User-Agent，避免 Bing 显示 Copilot 广告
+  // Edge 用户不会看到 Copilot 推广，因为 Edge 本身集成了 Copilot
+  const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0'
   webviewSession.setUserAgent(userAgent)
   
   // 设置默认 session 的 User-Agent（某些情况会用到）
@@ -202,9 +203,9 @@ ipcMain.handle('ai:chat', async (_event, { endpoint, apiKey, model, messages, to
       throw new Error('请先配置 API Key')
     }
 
-    // 添加超时控制
+    // 添加超时控制（增加到 180 秒，因为大模型响应可能较慢）
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 60000) // 60秒超时
+    const timeout = setTimeout(() => controller.abort(), 180000) // 180秒超时
 
     // 构建请求头
     const headers: Record<string, string> = {
@@ -238,7 +239,7 @@ ipcMain.handle('ai:chat', async (_event, { endpoint, apiKey, model, messages, to
     } catch (fetchError) {
       clearTimeout(timeout)
       if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        throw new Error('请求超时，请检查网络连接')
+        throw new Error('请求超时（180秒），可能原因：\n1. 网络连接不稳定\n2. API 服务器响应慢\n3. 需要科学上网访问该 API')
       }
       throw fetchError
     }
@@ -270,9 +271,9 @@ ipcMain.on('ai:chat-stream', async (event, { requestId, endpoint, apiKey, model,
       return
     }
 
-    // 添加超时控制
+    // 添加超时控制（增加到 180 秒）
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 60000)
+    const timeout = setTimeout(() => controller.abort(), 180000)
 
     // 构建请求头
     const headers: Record<string, string> = {
@@ -613,5 +614,49 @@ ipcMain.handle('download:openFolder', async () => {
     await mkdir(downloadsPath, { recursive: true })
   }
   shell.openPath(downloadsPath)
+  return true
+})
+
+// IPC 处理：加载学习记忆
+ipcMain.handle('learning-memory:load', async () => {
+  const fs = await import('fs/promises')
+  const memoryPath = join(app.getPath('userData'), 'learning-memory.json')
+  
+  try {
+    const content = await fs.readFile(memoryPath, 'utf-8')
+    return JSON.parse(content)
+  } catch {
+    return []
+  }
+})
+
+// IPC 处理：保存学习记忆
+ipcMain.handle('learning-memory:save', async (_event, memories) => {
+  const fs = await import('fs/promises')
+  const memoryPath = join(app.getPath('userData'), 'learning-memory.json')
+  
+  await fs.writeFile(memoryPath, JSON.stringify(memories, null, 2))
+  return true
+})
+
+// IPC 处理：读取聊天会话历史
+ipcMain.handle('chat-sessions:load', async () => {
+  const fs = await import('fs/promises')
+  const sessionsPath = join(app.getPath('userData'), 'chat-sessions.json')
+  
+  try {
+    const content = await fs.readFile(sessionsPath, 'utf-8')
+    return JSON.parse(content)
+  } catch {
+    return []
+  }
+})
+
+// IPC 处理：保存聊天会话历史
+ipcMain.handle('chat-sessions:save', async (_event, sessions) => {
+  const fs = await import('fs/promises')
+  const sessionsPath = join(app.getPath('userData'), 'chat-sessions.json')
+  
+  await fs.writeFile(sessionsPath, JSON.stringify(sessions, null, 2))
   return true
 })
