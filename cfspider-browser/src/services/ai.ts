@@ -1,4 +1,5 @@
 import { useStore } from '../store'
+import { matchSkill, updateSkillLearning, type Skill } from './skills'
 
 const isElectron = typeof window !== 'undefined' && (window as any).electronAPI !== undefined
 
@@ -1242,8 +1243,30 @@ export const aiTools = [
     type: 'function',
     function: {
       name: 'scan_interactive_elements',
-      description: 'Scan and list all interactive elements on the page (buttons, links, inputs). Use to discover available actions.',
+      description: 'Scan and list all interactive elements on the page (buttons, links, inputs). Use to discover available actions. Returns indexed list for use with click_by_index.',
       parameters: { type: 'object', properties: {} }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'click_by_index',
+      description: '通过索引点击元素。先调用 scan_interactive_elements 获取元素列表，然后使用此工具通过索引点击。',
+      parameters: {
+        type: 'object',
+        properties: {
+          category: { 
+            type: 'string', 
+            description: '元素类别: inputs, buttons, links, selects',
+            enum: ['inputs', 'buttons', 'links', 'selects']
+          },
+          index: { 
+            type: 'number', 
+            description: '元素索引号（从1开始）' 
+          }
+        },
+        required: ['category', 'index']
+      }
     }
   },
   {
@@ -1284,6 +1307,27 @@ export const aiTools = [
           selector: { type: 'string', description: 'CSS selector to check' }
         },
         required: ['selector']
+      }
+    }
+  },
+  // ==================== 视频分析工具 ====================
+  {
+    type: 'function',
+    function: {
+      name: 'summarize_video',
+      description: '总结页面上正在播放的视频内容。通过抽取关键帧进行视觉分析，生成视频摘要。需要视觉模型支持。',
+      parameters: {
+        type: 'object',
+        properties: {
+          frame_count: { 
+            type: 'number', 
+            description: '要分析的帧数（默认10帧，最多40帧）' 
+          },
+          focus: { 
+            type: 'string', 
+            description: '分析重点，如 "人物"、"产品"、"教程步骤" 等（可选）' 
+          }
+        }
       }
     }
   }
@@ -1555,19 +1599,46 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
             // Common website domain mappings
             var domainMap = {
               'jd': ['jd.com'],
+              '京东': ['jd.com'],
               'taobao': ['taobao.com', 'tmall.com'],
+              '淘宝': ['taobao.com'],
               'tmall': ['tmall.com'],
+              '天猫': ['tmall.com'],
               'github': ['github.com'],
               'amazon': ['amazon.com', 'amazon.cn'],
+              '亚马逊': ['amazon.cn', 'amazon.com'],
               'google': ['google.com'],
+              '谷歌': ['google.com'],
               'baidu': ['baidu.com'],
+              '百度': ['baidu.com'],
               'bing': ['bing.com'],
+              '必应': ['bing.com'],
               'microsoft': ['microsoft.com'],
+              '微软': ['microsoft.com'],
               'apple': ['apple.com'],
+              '苹果': ['apple.com'],
               'facebook': ['facebook.com'],
               'twitter': ['twitter.com', 'x.com'],
               'youtube': ['youtube.com'],
-              'bilibili': ['bilibili.com']
+              '油管': ['youtube.com'],
+              'bilibili': ['bilibili.com'],
+              'b站': ['bilibili.com'],
+              '哔哩哔哩': ['bilibili.com'],
+              '爱奇艺': ['iqiyi.com'],
+              'iqiyi': ['iqiyi.com'],
+              '优酷': ['youku.com'],
+              'youku': ['youku.com'],
+              '腾讯视频': ['v.qq.com'],
+              '芒果tv': ['mgtv.com'],
+              '抖音': ['douyin.com'],
+              'douyin': ['douyin.com'],
+              '知乎': ['zhihu.com'],
+              'zhihu': ['zhihu.com'],
+              '微博': ['weibo.com'],
+              'weibo': ['weibo.com'],
+              '网易': ['163.com'],
+              '新浪': ['sina.com.cn'],
+              '搜狐': ['sohu.com']
             };
             
             // Find matching domain patterns
@@ -1679,13 +1750,17 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
             var badSubdomainPrefixes = ['home.', 'my.', 'user.', 'account.', 'login.', 'passport.', 'member.', 'profile.', 'center.', 'i.', 'u.', 'sso.', 'auth.'];
             // Also check for these keywords in the result text
             var badKeywords = ['个人中心', '我的订单', '我的账户', '账户设置', '登录', 'home.', '/home', '个人信息'];
-            // Skip these UI elements (Copilot, navigation tabs, images, etc.)
+            // Skip these UI elements (Copilot, navigation tabs, images, sidebar cards, etc.)
             var badUIElements = [
               'copilot', 'copilotsearch', 'bingcopilot', 'b_sydConvTab', 'sydneyToggle',
               'ai生成', 'ai搜索', 'bing ai',
               '全部', '视频', '图片', '地图', '资讯', '更多', 
               'b_scopeList', 'b_header', 'b_algo_group', 'b_rich',
-              '/images/', 'images/search', 'image.baidu', 'images.google'
+              '/images/', 'images/search', 'image.baidu', 'images.google',
+              // 右侧信息卡（Wikipedia, 知识图谱等）
+              'b_entityTP', 'b_sideBleed', 'b_context', 'b_overlay', 'b_pag', 'b_footer',
+              'wikipedia', 'wikidata', 'wikimedia', 'youtube.com', 'youtu.be',
+              'knowledge-panel', 'kno-', 'side-panel', 'sidePanel'
             ];
             
             // 山寨/镜像网站黑名单
@@ -1803,7 +1878,7 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
               }
             }
             
-            // Helper to check if element is a bad UI element (Copilot, nav tabs, etc.)
+            // Helper to check if element is a bad UI element (Copilot, nav tabs, sidebar, etc.)
             function isBadUIElement(el) {
               var href = (el.href || '').toLowerCase();
               var className = (el.className || '').toLowerCase();
@@ -1825,8 +1900,17 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
                 }
               }
               
-              // Skip elements in header area (navigation)
               var rect = el.getBoundingClientRect();
+              
+              // Skip elements in right sidebar area (x > 60% of viewport width)
+              // This catches Wikipedia info cards, knowledge panels, etc.
+              var viewportWidth = window.innerWidth;
+              if (rect.left > viewportWidth * 0.6 && rect.right > viewportWidth * 0.65) {
+                console.log('CFSpider: Skipping element in right sidebar:', href || el.textContent?.slice(0, 30));
+                return true;
+              }
+              
+              // Skip elements in header area (navigation)
               if (rect.top < 180 && rect.top > 0) {
                 // Check if it looks like a navigation item
                 if (className.indexOf('scope') !== -1 || className.indexOf('nav') !== -1 ||
@@ -2588,6 +2672,27 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
 
     case 'read_full_page': {
       if (!webview) return 'Error: Cannot access page'
+      
+      // 检查是否有视觉模型可用
+      const { aiConfig: pageCfg } = store
+      const useBuiltInPage = pageCfg.useBuiltIn !== false && (!pageCfg.endpoint || !pageCfg.apiKey)
+      const hasVisionPage = useBuiltInPage ? !!BUILT_IN_AI.visionModel : !!pageCfg.visionModel
+      
+      // 如果没有视觉模型，使用 DOM 提取文本
+      if (!hasVisionPage) {
+        try {
+          const textContent = await webview.executeJavaScript(`
+            (function() {
+              var main = document.querySelector('main, article, .content, .main, #content, #main, body');
+              return main ? main.innerText.slice(0, 10000) : document.body.innerText.slice(0, 10000);
+            })()
+          `)
+          return '页面文本内容（DOM提取，无视觉分析）：\n\n' + textContent
+        } catch (e) {
+          return 'Error reading page: ' + e
+        }
+      }
+      
       try {
         const maxScrolls = (args.max_scrolls as number) || 10
         const allContents: string[] = []
@@ -2684,6 +2789,16 @@ async function executeToolCall(name: string, args: Record<string, unknown>): Pro
     
     case 'solve_captcha': {
       if (!webview) return 'Error: Cannot access page'
+      
+      // 检查是否有视觉模型可用
+      const { aiConfig } = store
+      const useBuiltIn = aiConfig.useBuiltIn !== false && (!aiConfig.endpoint || !aiConfig.apiKey)
+      const hasVisionModel = useBuiltIn ? !!BUILT_IN_AI.visionModel : !!aiConfig.visionModel
+      
+      if (!hasVisionModel) {
+        return '当前为单模型模式，无法使用验证码识别功能。请在设置中配置视觉模型，或使用内置 AI 服务。'
+      }
+      
       try {
         const captchaType = args.captcha_type as string
         store.setCurrentModelType('vision')
@@ -2878,6 +2993,16 @@ ${detectedType === 'click' ? '1. 按顺序使用 click_element 或 visual_click 
 
     case 'visual_click': {
       if (!webview) return 'Error: Cannot access page'
+      
+      // 检查是否有视觉模型可用
+      const { aiConfig: aiCfg } = store
+      const useBuiltInVision = aiCfg.useBuiltIn !== false && (!aiCfg.endpoint || !aiCfg.apiKey)
+      const hasVision = useBuiltInVision ? !!BUILT_IN_AI.visionModel : !!aiCfg.visionModel
+      
+      if (!hasVision) {
+        return '当前为单模型模式，无法使用视觉点击功能。请尝试使用 click_text 或 click_element 替代。'
+      }
+      
       try {
         const description = args.description as string
         
@@ -4268,6 +4393,116 @@ ${detectedType === 'click' ? '1. 按顺序使用 click_element 或 visual_click 
       }
     }
 
+    case 'click_by_index': {
+      if (!webview) return 'Error: Cannot access page'
+      const category = args.category as string
+      const index = args.index as number
+      
+      if (!category || !index) {
+        return 'Error: 需要提供 category（元素类别）和 index（索引号）'
+      }
+      
+      try {
+        const result = await webview.executeJavaScript(`
+          (function() {
+            var category = '${category}';
+            var index = ${index} - 1; // 转换为0-based索引
+            var elements = [];
+            
+            if (category === 'inputs') {
+              document.querySelectorAll('input, textarea').forEach(function(el) {
+                if (el.offsetWidth > 0 && el.offsetHeight > 0) {
+                  elements.push(el);
+                }
+              });
+            } else if (category === 'buttons') {
+              document.querySelectorAll('button, input[type="submit"], input[type="button"], [role="button"]').forEach(function(el) {
+                if (el.offsetWidth > 0 && el.offsetHeight > 0) {
+                  elements.push(el);
+                }
+              });
+            } else if (category === 'links') {
+              var linkCount = 0;
+              document.querySelectorAll('a[href]').forEach(function(el) {
+                if (linkCount < 15 && el.offsetWidth > 0) {
+                  var text = (el.textContent || '').trim();
+                  if (text.length > 2) {
+                    elements.push(el);
+                    linkCount++;
+                  }
+                }
+              });
+            } else if (category === 'selects') {
+              document.querySelectorAll('select').forEach(function(el) {
+                if (el.offsetWidth > 0) {
+                  elements.push(el);
+                }
+              });
+            }
+            
+            if (index < 0 || index >= elements.length) {
+              return { success: false, error: '索引超出范围，该类别共有 ' + elements.length + ' 个元素' };
+            }
+            
+            var el = elements[index];
+            var rect = el.getBoundingClientRect();
+            var text = (el.textContent || el.value || el.placeholder || '').slice(0, 50).trim();
+            
+            // 添加高亮
+            var h = document.createElement('div');
+            h.id = 'cfspider-agent-highlight';
+            h.style.cssText = 'position:fixed;pointer-events:none;z-index:2147483647;border:4px solid #22c55e;background:rgba(34,197,94,0.2);border-radius:6px;box-shadow:0 0 20px rgba(34,197,94,0.5);';
+            h.style.left = (rect.left - 4) + 'px';
+            h.style.top = (rect.top - 4) + 'px';
+            h.style.width = (rect.width + 8) + 'px';
+            h.style.height = (rect.height + 8) + 'px';
+            document.body.appendChild(h);
+            
+            // 点击元素
+            el.click();
+            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+              el.focus();
+            }
+            
+            setTimeout(function() {
+              var hh = document.getElementById('cfspider-agent-highlight');
+              if (hh) hh.remove();
+            }, 1000);
+            
+            return { 
+              success: true, 
+              tag: el.tagName, 
+              text: text,
+              x: rect.left + rect.width / 2,
+              y: rect.top + rect.height / 2
+            };
+          })()
+        `)
+        
+        if (!result.success) {
+          return `点击失败: ${result.error}`
+        }
+        
+        // 显示虚拟鼠标动画
+        const container = document.getElementById('browser-container')
+        if (container) {
+          const containerRect = container.getBoundingClientRect()
+          const x = result.x + containerRect.left
+          const y = result.y + containerRect.top
+          store.showMouse()
+          store.moveMouse(x, y, 400)
+          await new Promise(resolve => setTimeout(resolve, 450))
+          store.clickMouse()
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        return `已点击 ${category} 类别的第 ${index} 个元素: <${result.tag}> "${result.text}"`
+      } catch (e) {
+        return `点击失败: ${e}`
+      }
+    }
+
     case 'get_page_content': {
       if (!webview) return 'Error: Cannot access page'
       try {
@@ -4399,6 +4634,266 @@ ${detectedType === 'click' ? '1. 按顺序使用 click_element 或 visual_click 
       }
     }
 
+    // ==================== 视频分析工具 ====================
+    case 'summarize_video': {
+      if (!webview) return 'Error: Cannot access page'
+      
+      // 检查视觉模型是否可用
+      const { aiConfig: videoConfig } = store
+      const useBuiltInVideo = videoConfig.useBuiltIn !== false && (!videoConfig.endpoint || !videoConfig.apiKey)
+      const hasVisionForVideo = useBuiltInVideo ? !!BUILT_IN_AI.visionModel : !!videoConfig.visionModel
+      
+      if (!hasVisionForVideo) {
+        return '视频总结需要视觉模型支持。请在设置中配置视觉模型，或使用内置 AI 服务。'
+      }
+      
+      try {
+        const frameCount = Math.min(Math.max((args.frame_count as number) || 10, 1), 40)
+        const focus = (args.focus as string) || ''
+        
+        store.setCurrentModelType('vision')
+        console.log('[CFSpider] 开始视频分析，计划抽取', frameCount, '帧')
+        
+        // 检测页面上的视频元素
+        const videoInfo = await webview.executeJavaScript(`
+          (function() {
+            // 查找视频元素
+            var video = document.querySelector('video');
+            if (!video) {
+              // 尝试查找 iframe 中的视频（如 YouTube）
+              var iframes = document.querySelectorAll('iframe');
+              for (var i = 0; i < iframes.length; i++) {
+                var src = iframes[i].src || '';
+                if (src.includes('youtube') || src.includes('bilibili') || src.includes('youku') || src.includes('iqiyi')) {
+                  return {
+                    type: 'iframe',
+                    platform: src.includes('youtube') ? 'YouTube' :
+                              src.includes('bilibili') ? 'Bilibili' :
+                              src.includes('youku') ? '优酷' :
+                              src.includes('iqiyi') ? '爱奇艺' : '视频平台',
+                    src: src
+                  };
+                }
+              }
+              return null;
+            }
+            
+            return {
+              type: 'video',
+              duration: video.duration || 0,
+              currentTime: video.currentTime || 0,
+              paused: video.paused,
+              width: video.videoWidth,
+              height: video.videoHeight,
+              src: video.src || video.currentSrc
+            };
+          })()
+        `)
+        
+        if (!videoInfo) {
+          store.setCurrentModelType(null)
+          return '页面上未找到视频元素。请确保视频正在播放或页面包含视频播放器。'
+        }
+        
+        // 如果是 iframe 嵌入的视频（如 YouTube），使用页面截图分析
+        if (videoInfo.type === 'iframe') {
+          console.log('[CFSpider] 检测到嵌入式视频平台:', videoInfo.platform)
+          
+          // 对嵌入视频，直接截图分析当前画面（最多分析10帧，因为无法控制进度）
+          const iframeFrameCount = Math.min(frameCount, 10)
+          const frameAnalyses: string[] = []
+          
+          for (let i = 0; i < iframeFrameCount; i++) {
+            const image = await webview.capturePage()
+            if (!image) continue
+            
+            const base64Image = image.toDataURL().replace(/^data:image\/\w+;base64,/, '')
+            
+            const response = await (window as any).electronAPI.aiChat({
+              endpoint: BUILT_IN_AI.endpoint,
+              apiKey: getBuiltInKey(),
+              model: BUILT_IN_AI.visionModel,
+              messages: [{
+                role: 'user',
+                content: [
+                  { 
+                    type: 'text', 
+                    text: `这是一个${videoInfo.platform}视频的第${i + 1}帧截图。请分析视频画面内容：
+${focus ? `重点关注：${focus}` : ''}
+
+请描述：
+1. 画面中的主要内容
+2. 视频类型（教程、娱乐、新闻等）
+3. 关键信息或字幕内容（如有）
+
+简洁回答，50字以内。` 
+                  },
+                  { type: 'image_url', image_url: { url: `data:image/png;base64,${base64Image}` } }
+                ]
+              }]
+            })
+            
+            if (response.content) {
+              frameAnalyses.push(`帧${i + 1}: ${response.content}`)
+            }
+            
+            // 等待一小段时间再截下一帧
+            if (i < iframeFrameCount - 1) {
+              await new Promise(resolve => setTimeout(resolve, 1500))
+            }
+          }
+          
+          store.setCurrentModelType(null)
+          
+          if (frameAnalyses.length === 0) {
+            return `检测到${videoInfo.platform}视频，但无法分析画面内容。`
+          }
+          
+          // 生成总结
+          let summary = `[${videoInfo.platform}视频分析] 共分析${frameAnalyses.length}帧\n\n`
+          summary += frameAnalyses.join('\n\n')
+          
+          if (frameAnalyses.length > 1) {
+            // 请求生成整体总结
+            const summaryResponse = await (window as any).electronAPI.aiChat({
+              endpoint: useBuiltInVideo ? BUILT_IN_AI.endpoint : videoConfig.endpoint,
+              apiKey: useBuiltInVideo ? getBuiltInKey() : videoConfig.apiKey,
+              model: useBuiltInVideo ? BUILT_IN_AI.model : videoConfig.model,
+              messages: [{
+                role: 'user',
+                content: `根据以下视频帧分析，生成一个简短的视频总结（150字以内）：\n\n${frameAnalyses.join('\n')}`
+              }]
+            })
+            
+            if (summaryResponse.content) {
+              summary += `\n\n[总结]\n${summaryResponse.content}`
+            }
+          }
+          
+          return summary
+        }
+        
+        // 原生 video 元素 - 通过控制播放进度抽取帧
+        const duration = videoInfo.duration
+        if (duration <= 0) {
+          store.setCurrentModelType(null)
+          return '视频时长未知或为直播流，无法进行帧分析。'
+        }
+        
+        console.log('[CFSpider] 视频时长:', duration, '秒，抽取', frameCount, '帧')
+        
+        // 计算抽帧时间点（均匀分布）
+        const timePoints: number[] = []
+        for (let i = 0; i < frameCount; i++) {
+          timePoints.push((duration / (frameCount + 1)) * (i + 1))
+        }
+        
+        const frameAnalyses: string[] = []
+        
+        // 批量分析帧（每5帧为一组）
+        const batchSize = 5
+        for (let batch = 0; batch < Math.ceil(timePoints.length / batchSize); batch++) {
+          const batchStart = batch * batchSize
+          const batchEnd = Math.min(batchStart + batchSize, timePoints.length)
+          
+          for (let i = batchStart; i < batchEnd; i++) {
+            const targetTime = timePoints[i]
+            
+            // 跳转到指定时间点
+            await webview.executeJavaScript(`
+              (function() {
+                var video = document.querySelector('video');
+                if (video) {
+                  video.currentTime = ${targetTime};
+                  video.pause();
+                }
+              })()
+            `)
+            
+            // 等待视频加载该帧
+            await new Promise(resolve => setTimeout(resolve, 300))
+            
+            // 截图
+            const image = await webview.capturePage()
+            if (!image) continue
+            
+            const base64Image = image.toDataURL().replace(/^data:image\/\w+;base64,/, '')
+            const timeStr = `${Math.floor(targetTime / 60)}:${String(Math.floor(targetTime % 60)).padStart(2, '0')}`
+            
+            // 分析帧内容
+            const response = await (window as any).electronAPI.aiChat({
+              endpoint: BUILT_IN_AI.endpoint,
+              apiKey: getBuiltInKey(),
+              model: BUILT_IN_AI.visionModel,
+              messages: [{
+                role: 'user',
+                content: [
+                  { 
+                    type: 'text', 
+                    text: `这是视频在 ${timeStr} 时刻的画面。请简短描述画面内容（30字以内）。${focus ? `重点关注：${focus}` : ''}` 
+                  },
+                  { type: 'image_url', image_url: { url: `data:image/png;base64,${base64Image}` } }
+                ]
+              }]
+            })
+            
+            if (response.content) {
+              frameAnalyses.push(`[${timeStr}] ${response.content}`)
+            }
+          }
+          
+          // 每批次之间短暂休息
+          if (batch < Math.ceil(timePoints.length / batchSize) - 1) {
+            await new Promise(resolve => setTimeout(resolve, 200))
+          }
+        }
+        
+        // 恢复视频播放
+        await webview.executeJavaScript(`
+          (function() {
+            var video = document.querySelector('video');
+            if (video) video.play();
+          })()
+        `)
+        
+        store.setCurrentModelType(null)
+        
+        if (frameAnalyses.length === 0) {
+          return '视频帧分析失败，无法获取有效信息。'
+        }
+        
+        // 生成视频总结
+        const durationMin = Math.floor(duration / 60)
+        const durationSec = Math.floor(duration % 60)
+        let summary = `[视频分析] 时长: ${durationMin}分${durationSec}秒 | 分析帧数: ${frameAnalyses.length}\n\n`
+        summary += '关键帧内容:\n'
+        summary += frameAnalyses.join('\n')
+        
+        // 生成整体总结
+        if (frameAnalyses.length > 2) {
+          const summaryResponse = await (window as any).electronAPI.aiChat({
+            endpoint: useBuiltInVideo ? BUILT_IN_AI.endpoint : videoConfig.endpoint,
+            apiKey: useBuiltInVideo ? getBuiltInKey() : videoConfig.apiKey,
+            model: useBuiltInVideo ? BUILT_IN_AI.model : videoConfig.model,
+            messages: [{
+              role: 'user',
+              content: `根据以下视频帧分析，生成一个详细的视频总结（200字以内）：\n\n${frameAnalyses.join('\n')}`
+            }]
+          })
+          
+          if (summaryResponse.content) {
+            summary += `\n\n[总结]\n${summaryResponse.content}`
+          }
+        }
+        
+        return summary
+      } catch (e) {
+        store.setCurrentModelType(null)
+        console.error('[CFSpider] 视频分析失败:', e)
+        return `视频分析失败: ${e}`
+      }
+    }
+
     default:
       return 'Unknown tool: ' + name
   }
@@ -4431,9 +4926,9 @@ const systemPrompt = `你是 CFspider 智能浏览器自动化助手，由 viole
 对于这些情况，只需用中文自然回复，不要调用任何工具。
 
 示例：
-- 用户："你好" -> 回复："嗨~你好！我是 CFspider 智能浏览器助手，有什么可以帮你的吗？"
-- 用户："你是谁" -> 回复："我是 CFspider 智能浏览器 AI 助手，由 violetteam 团队开发，来自 cfspider 项目。我可以帮你自动化浏览器操作，比如搜索、点击、导航网站等，交给我就行~"
-- 用户："谢谢" -> 回复："不客气呀！有需要随时叫我~"
+- 用户："你好" -> 回复："你好，我是 CFspider 智能浏览器助手，有什么可以帮你的吗？"
+- 用户："你是谁" -> 回复："你好，我是 CFspider 智能浏览器 AI 助手。{{MODEL_INTRODUCTION}} CFspider 工具由 violetteam 团队开发。我可以帮你自动化浏览器操作，比如搜索、点击、导航网站等。"
+- 用户："谢谢" -> 回复："不客气，有需要随时叫我。"
 
 ### 以下情况使用工具：
 - 打开网站："打开京东"、"去 GitHub"
@@ -4843,10 +5338,54 @@ export async function sendAIMessage(content: string, useTools: boolean = true) {
 
   try {
     // 构建聊天历史，包含工具调用信息以便 AI 记住之前的操作
+    
+    // 动态生成模型名介绍
+    const toolModelName = useBuiltIn 
+      ? BUILT_IN_AI.model.split('/').pop() || 'DeepSeek-V3'
+      : (effectiveConfig.model || '未配置')
+    const visionModelName = useBuiltIn 
+      ? BUILT_IN_AI.visionModel?.split('/').pop() || ''
+      : (aiConfig.visionModel?.split('/').pop() || '')
+    
+    // 提取模型开发团队（从模型名推断）
+    const getModelTeam = (modelName: string): string => {
+      const name = modelName.toLowerCase()
+      if (name.includes('deepseek')) return 'DeepSeek'
+      if (name.includes('qwen')) return '阿里云通义千问'
+      if (name.includes('glm') || name.includes('chatglm')) return '智谱 AI'
+      if (name.includes('gpt')) return 'OpenAI'
+      if (name.includes('claude')) return 'Anthropic'
+      if (name.includes('gemini')) return 'Google'
+      if (name.includes('llama')) return 'Meta'
+      if (name.includes('mistral')) return 'Mistral AI'
+      if (name.includes('yi')) return '零一万物'
+      if (name.includes('baichuan')) return '百川智能'
+      if (name.includes('moonshot') || name.includes('kimi')) return 'Moonshot AI'
+      return ''
+    }
+    
+    const toolModelTeam = getModelTeam(toolModelName)
+    const visionModelTeam = visionModelName ? getModelTeam(visionModelName) : ''
+    
+    let modelIntroduction = ''
+    if (modelMode === 'dual' && visionModelName) {
+      const toolTeamStr = toolModelTeam ? `（由 ${toolModelTeam} 开发）` : ''
+      const visionTeamStr = visionModelTeam ? `（由 ${visionModelTeam} 开发）` : ''
+      modelIntroduction = `目前由两个模型共同驱动：${toolModelName}${toolTeamStr}负责文本理解和工具调用，${visionModelName}${visionTeamStr}负责页面视觉分析。`
+    } else {
+      const teamStr = toolModelTeam ? `（由 ${toolModelTeam} 开发）` : ''
+      modelIntroduction = `目前由 ${toolModelName} 模型${teamStr}驱动。`
+    }
+    
+    // 替换系统提示中的模型名占位符
+    const dynamicSystemPrompt = systemPrompt
+      .replace(/\{\{TOOL_MODEL_NAME\}\}/g, toolModelName)
+      .replace(/\{\{MODEL_INTRODUCTION\}\}/g, modelIntroduction)
+    
     // 如果有 OCR 页面分析结果，添加到系统提示词中
     const enhancedSystemPrompt = pageContext 
-      ? `${systemPrompt}\n\n## 当前页面分析结果（由视觉模型提供）\n\n${pageContext}\n\n请根据以上页面分析结果来决定下一步操作。`
-      : systemPrompt
+      ? `${dynamicSystemPrompt}\n\n## 当前页面分析结果（由视觉模型提供）\n\n${pageContext}\n\n请根据以上页面分析结果来决定下一步操作。`
+      : dynamicSystemPrompt
     
     const chatHistory: Array<{ role: string; content?: string; tool_calls?: any[]; tool_call_id?: string; name?: string }> = [
       { role: 'system', content: enhancedSystemPrompt }
@@ -4882,6 +5421,28 @@ export async function sendAIMessage(content: string, useTools: boolean = true) {
     
     // 添加当前用户消息
     chatHistory.push({ role: 'user', content })
+
+    // 尝试匹配技能，提供给 AI 作为参考
+    let matchedSkill: Skill | null = null
+    try {
+      const webview = document.querySelector('webview') as any
+      if (webview) {
+        const currentUrl = await webview.executeJavaScript('window.location.href') as string
+        const currentDomain = new URL(currentUrl).hostname
+        matchedSkill = await matchSkill(content, currentDomain)
+        if (matchedSkill) {
+          console.log('[CFSpider] 匹配到技能:', matchedSkill.name, '成功率:', matchedSkill.successRate)
+          // 将技能信息添加到聊天历史作为系统提示
+          const skillHint = `[技能提示] 匹配到「${matchedSkill.name}」技能（成功率: ${matchedSkill.successRate}%）
+触发词: ${matchedSkill.triggers.join(', ')}
+操作步骤: ${matchedSkill.steps.map((s, i) => `${i+1}. ${s.action}${s.target ? `: ${s.target}` : ''}`).join(' -> ')}
+${matchedSkill.learnedPatterns.length > 0 ? `学习到的模式: ${matchedSkill.learnedPatterns.slice(0, 3).map(p => p.pattern).join(', ')}` : ''}`
+          chatHistory.push({ role: 'system', content: skillHint })
+        }
+      }
+    } catch (e) {
+      console.error('[CFSpider] 技能匹配失败:', e)
+    }
 
     let iteration = 0
     const maxIterations = 30
@@ -4971,7 +5532,8 @@ export async function sendAIMessage(content: string, useTools: boolean = true) {
         updateLastMessageWithToolCalls('', toolCallHistory)
         
         // 如果操作失败，触发紧张模式和语气词反应
-        if (result.includes('Error') || result.includes('失败') || result.includes('not found') || result.includes('Cannot')) {
+        const operationFailed = result.includes('Error') || result.includes('失败') || result.includes('not found') || result.includes('Cannot')
+        if (operationFailed) {
           // 触发紧张乱动
           store.panicMouse(1500)
           
@@ -4983,6 +5545,23 @@ export async function sendAIMessage(content: string, useTools: boolean = true) {
           
           // 等待紧张动画完成
           await new Promise(resolve => setTimeout(resolve, 1200))
+        }
+        
+        // 更新技能学习（如果匹配到了技能）
+        if (matchedSkill) {
+          try {
+            await updateSkillLearning(matchedSkill.id, !operationFailed, {
+              pattern: `${funcName}:${JSON.stringify(funcArgs).slice(0, 50)}`,
+              selector: funcArgs.selector || funcArgs.text || funcArgs.target,
+              confidence: operationFailed ? 30 : 70,
+              successCount: operationFailed ? 0 : 1,
+              failureCount: operationFailed ? 1 : 0,
+              lastUsed: Date.now(),
+              examples: operationFailed ? [] : [result.slice(0, 100)]
+            })
+          } catch (e) {
+            console.error('[CFSpider] 技能学习更新失败:', e)
+          }
         }
 
         chatHistory.push({
