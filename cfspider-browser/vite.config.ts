@@ -11,7 +11,16 @@ export default defineConfig({
     }
   },
   optimizeDeps: {
-    include: ['zustand', 'react', 'style-to-js', 'html-react-parser']
+    include: [
+      'zustand',
+      'react',
+      'react-dom',
+      'react-markdown',
+      'react-syntax-highlighter',
+      'html-react-parser',
+      'style-to-js',
+      'debug'
+    ]
   },
   build: {
     outDir: 'dist',
