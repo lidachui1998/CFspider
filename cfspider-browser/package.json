@@ -1,6 +1,6 @@
 {
   "name": "cfspider-browser",
-  "version": "1.0.8",
+  "version": "1.1.0",
   "description": "CFspider 智能浏览器 - AI驱动的浏览器，自然语言控制浏览器自动化",
   "keywords": [
     "browser",
@@ -50,7 +50,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "electron:dev": "npm run electron:build-main && concurrently \"vite --port 5173 --strictPort\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
+    "electron:dev": "npm run electron:build-main && concurrently \"vite --port 5174\" \"wait-on http://localhost:5174 && cross-env NODE_ENV=development electron .\"",
     "electron:build-main": "esbuild electron/main.ts --bundle --platform=node --target=node18 --outfile=dist-electron/main.js --external:electron && esbuild electron/preload.ts --bundle --platform=node --target=node18 --outfile=dist-electron/preload.js --external:electron",
     "electron:build": "npm run build && npm run electron:build-main && electron-builder",
     "electron:build-win": "npm run build && npm run electron:build-main && electron-builder --win",
@@ -66,7 +66,7 @@
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.0",
     "xlsx": "^0.18.5",
-    "zustand": "^4.5.0"
+    "zustand": "^5.0.0"
   },
   "devDependencies": {
     "@types/file-saver": "^2.0.7",

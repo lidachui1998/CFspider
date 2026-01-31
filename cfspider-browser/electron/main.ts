@@ -34,7 +34,7 @@ function createWindow() {
 
   // 开发模式加载本地服务器
   if (process.env.NODE_ENV === 'development' || !app.isPackaged) {
-    mainWindow.loadURL('http://localhost:5173')
+    mainWindow.loadURL('http://localhost:5174')
   } else {
     mainWindow.loadFile(join(__dirname, '../dist/index.html'))
   }
