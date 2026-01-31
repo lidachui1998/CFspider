@@ -10,6 +10,9 @@ export default defineConfig({
       '@': resolve(__dirname, 'src')
     }
   },
+  optimizeDeps: {
+    include: ['zustand', 'use-sync-external-store/shim/with-selector']
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true
