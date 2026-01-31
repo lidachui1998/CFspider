@@ -89,5 +89,8 @@ cfspider-browser/release/
 cfspider-browser/.vscode/
 cfspider-browser/*.log
 
+# 允许 cfspider-browser 的 CLI 脚本
+!cfspider-browser/bin/cli.js
+
 # Cursor 工作区
 .cursor/
