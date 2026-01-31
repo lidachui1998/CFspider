@@ -1062,7 +1062,19 @@ response = cfspider.get(
 
 ## 安装
 
-### 方式一：PyPI 安装（推荐）
+### 方式一：CFspider 官方源安装（推荐，国内加速）
+
+```bash
+# 使用 CFspider 官方加速源（国内推荐）
+pip install -i https://server.cfspider.com/simple/ cfspider
+```
+
+> **官方源优势**：
+> - 东京服务器，亚太地区下载速度快
+> - 同步 PyPI 最新版本
+> - 无需配置，一行命令安装
+
+### 方式二：PyPI 安装
 
 ```bash
 pip install cfspider
@@ -1083,9 +1095,9 @@ pip install cfspider
 > pip install cfspider --break-system-packages
 > ```
 
-### 方式二：国内镜像源安装
+### 方式三：国内其他镜像源安装
 
-如果 PyPI 访问较慢，可使用国内镜像：
+如果 PyPI 访问较慢，也可使用其他国内镜像：
 
 ```bash
 # 清华源
@@ -1098,7 +1110,7 @@ pip install cfspider -i https://mirrors.aliyun.com/pypi/simple
 pip install cfspider -i https://pypi.mirrors.ustc.edu.cn/simple
 ```
 
-### 方式三：从 GitHub 安装
+### 方式四：从 GitHub 安装
 
 ```bash
 pip install git+https://github.com/violettoolssite/CFspider.git
