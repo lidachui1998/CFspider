@@ -26,6 +26,32 @@ if (!fs.existsSync(packageJsonPath)) {
   process.exit(1);
 }
 
+// 检查依赖是否已安装
+const nodeModulesPath = path.join(packageRoot, 'node_modules');
+const esbuildPath = path.join(nodeModulesPath, '.bin', process.platform === 'win32' ? 'esbuild.cmd' : 'esbuild');
+
+function ensureDependencies() {
+  if (!fs.existsSync(nodeModulesPath) || !fs.existsSync(esbuildPath)) {
+    console.log('\n📦 首次运行，正在安装依赖...\n');
+    console.log('这可能需要几分钟，请耐心等待...\n');
+    
+    const isWindows = process.platform === 'win32';
+    const npmCmd = isWindows ? 'npm.cmd' : 'npm';
+    
+    try {
+      execSync(npmCmd + ' install', {
+        cwd: packageRoot,
+        stdio: 'inherit'
+      });
+      console.log('\n✅ 依赖安装完成！\n');
+    } catch (err) {
+      console.error('\n❌ 依赖安装失败，请手动运行: npm install');
+      console.error('目录:', packageRoot);
+      process.exit(1);
+    }
+  }
+}
+
 // 帮助信息
 function showHelp() {
   console.log(`
@@ -95,22 +121,27 @@ function installDeps() {
 switch (command) {
   case 'dev':
   case 'start':
+    ensureDependencies();
     runNpmScript('electron:dev');
     break;
     
   case 'build':
+    ensureDependencies();
     runNpmScript('electron:build');
     break;
     
   case 'build-win':
+    ensureDependencies();
     runNpmScript('electron:build-win');
     break;
     
   case 'build-mac':
+    ensureDependencies();
     runNpmScript('electron:build-mac');
     break;
     
   case 'build-linux':
+    ensureDependencies();
     runNpmScript('electron:build-linux');
     break;
     
