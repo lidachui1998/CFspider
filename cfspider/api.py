@@ -472,7 +472,12 @@ def request(method, url, cf_proxies=None, uuid=None, http2=False, impersonate=No
     if delay:
         from .stealth import random_delay
         random_delay(delay[0], delay[1])
-    
+
+    # 如果启用隐身模式，通过 CloakBrowser 发请求（真实浏览器指纹，放弃手工 headers）
+    if stealth:
+        from .stealth import _cloak_single_request
+        return _cloak_single_request(method, url, cf_proxies=cf_proxies, uuid=uuid, two_proxy=two_proxy, **kwargs)
+
     # 如果指定了 cf_proxies，自动检测 Workers 类型
     if cf_proxies:
         workers_mode = None

@@ -36,7 +36,71 @@ CFspider 隐身模式模块
 import random
 import time
 from typing import Optional, Dict, List, Tuple, Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlencode, urlunparse
+
+# CloakBrowser 源码级反检测
+CLOAKBROWSER_AVAILABLE = False
+try:
+    from cloakbrowser import launch as _cloak_launch_sync
+    CLOAKBROWSER_AVAILABLE = True
+except ImportError:
+    pass
+
+
+class _CloakResponseAdapter:
+    """将 Playwright APIResponse 适配为 CFSpiderResponse 兼容接口"""
+    def __init__(self, pw_response):
+        self._r = pw_response
+        # 必须在 browser context 关闭前立即读取，不能懒加载
+        self._text = pw_response.text()
+        self._content = pw_response.body()
+        self._status = pw_response.status
+        self._headers = dict(pw_response.headers)
+        self._url = pw_response.url
+        self._ok = pw_response.ok
+
+    @property
+    def status_code(self):
+        return self._status
+
+    @property
+    def text(self):
+        return self._text
+
+    @property
+    def content(self):
+        return self._content
+
+    @property
+    def headers(self):
+        return self._headers
+
+    @property
+    def url(self):
+        return self._url
+
+    @property
+    def encoding(self):
+        return 'utf-8'
+
+    @encoding.setter
+    def encoding(self, value):
+        pass
+
+    @property
+    def cookies(self):
+        return {}
+
+    def json(self, **kwargs):
+        import json as _j
+        return _j.loads(self.text)
+
+    def raise_for_status(self):
+        if not self._ok:
+            raise Exception(f"请求失败 [{self.status_code}]: {self.url}")
+
+    def __repr__(self):
+        return f"<CloakResponse [{self.status_code}]>"
 
 
 # Chrome 131 完整请求头模板
@@ -220,72 +284,15 @@ def update_sec_fetch_headers(headers: Dict, site_type: str = 'none') -> Dict:
 
 class StealthSession:
     """
-    隐身会话类 / Stealth Session class
+    CloakBrowser 驱动的隐身会话
+
+    使用 CloakBrowser 的 context.request 发送 HTTP 请求：
+    - 真实 Chrome TLS 指纹（源码级 C++ 补丁）
+    - 真实浏览器请求头（无需手动维护 headers 列表）
+    - 自动 Cookie 管理（整个会话共享 browser context）
+    - 自动 Referer、随机延迟
+    - 支持 CF Workers 代理
     
-    提供完整的会话一致性管理，解决反爬虫检测的三大问题：
-    Provides complete session consistency management, solving three major anti-crawler issues:
-    
-    1. 固定 User-Agent：整个会话使用同一个浏览器指纹
-       Fixed User-Agent: Uses the same browser fingerprint throughout the session
-    2. 自动管理 Cookie：响应中的 Cookie 自动保存并在后续请求中发送
-       Auto Cookie Management: Cookies from responses are saved and sent in subsequent requests
-    3. 自动添加 Referer：页面跳转时自动添加来源信息
-       Auto Referer: Automatically adds origin information during page navigation
-    4. 随机延迟：每次请求前随机等待，模拟人类行为
-       Random Delay: Random wait before each request, simulating human behavior
-    5. 自动更新 Sec-Fetch-Site：根据 Referer 判断同站/跨站访问
-       Auto Sec-Fetch-Site: Updates based on Referer to indicate same-site/cross-site access
-    
-    Attributes:
-        browser (str): 当前使用的浏览器类型 / Current browser type
-        cf_proxies (str): Workers 代理地址 / Workers proxy address
-        uuid (str): VLESS UUID（可选，自动获取） / VLESS UUID (optional, auto-fetched)
-        delay (tuple): 随机延迟范围 / Random delay range
-        auto_referer (bool): 是否自动添加 Referer / Whether to auto-add Referer
-        last_url (str): 上一次请求的 URL / Last requested URL
-        request_count (int): 会话累计请求次数 / Session cumulative request count
-    
-    Example:
-        >>> import cfspider
-        >>> 
-        >>> # 基本用法（使用 Workers 代理）
-        >>> with cfspider.StealthSession(
-        ...     cf_proxies="https://cfspider.violetqqcom.workers.dev"
-        ... ) as session:
-        ...     # 第一次请求：Sec-Fetch-Site: none
-        ...     r1 = session.get("https://example.com")
-        ...     
-        ...     # 第二次请求：自动添加 Referer: https://example.com
-        ...     # Sec-Fetch-Site: same-origin
-        ...     r2 = session.get("https://example.com/page2")
-        >>> 
-        >>> # 带随机延迟
-        >>> with cfspider.StealthSession(
-        ...     cf_proxies="https://cfspider.violetqqcom.workers.dev",
-        ...     delay=(1, 3)
-        ... ) as session:
-        ...     for url in urls:
-        ...         # 每次请求前随机等待 1-3 秒
-        ...         response = session.get(url)
-        >>> 
-        >>> # 完整配置
-        >>> with cfspider.StealthSession(
-        ...     cf_proxies="https://cfspider.violetqqcom.workers.dev",
-        ...     browser='firefox',
-        ...     delay=(0.5, 2.0)
-        ... ) as session:
-        ...     response = session.get("https://example.com")
-        ...     print(f"请求次数: {session.request_count}")
-        ...     print(f"当前 Cookie: {session.get_cookies()}")
-    
-    Note:
-        StealthSession 与普通 Session 的区别：
-        Differences between StealthSession and regular Session:
-        - Session: 仅保持代理配置和基本请求头 / Only maintains proxy config and basic headers
-        - StealthSession: 完整的隐身模式，包括浏览器指纹、Cookie 管理、
-                          自动 Referer、随机延迟、Sec-Fetch-* 更新
-                          Complete stealth mode including browser fingerprint, Cookie management,
-                          auto Referer, random delay, Sec-Fetch-* updates
     """
     
     def __init__(
@@ -299,46 +306,6 @@ class StealthSession:
         two_proxy: str = None,
         **kwargs
     ):
-        """
-        初始化隐身会话 / Initialize stealth session
-        
-        Args:
-            browser (str): 浏览器类型，决定使用的 User-Agent 和请求头模板
-                          / Browser type, determines User-Agent and header template
-                - 'chrome': Chrome 131（推荐，最完整的请求头，15 个）/ Recommended, 15 headers
-                - 'firefox': Firefox 133（含 Sec-GPC 隐私头，12 个）/ Includes privacy headers
-                - 'safari': Safari 18（macOS 风格，5 个）/ macOS style
-                - 'edge': Edge 131（类似 Chrome，14 个）/ Similar to Chrome
-                - 'chrome_mobile': Chrome Mobile（Android，10 个）/ Android mobile
-            cf_proxies (str, optional): Workers 代理地址
-                                       / Workers proxy address
-                - 如 "https://cfspider.violetqqcom.workers.dev"
-                - 不指定则直接请求目标 URL / If not specified, requests directly
-                - UUID 自动从 Workers 获取 / UUID auto-fetched from Workers
-            uuid (str, optional): VLESS UUID（可选，不填则自动获取）
-                                 / VLESS UUID (optional, auto-fetched if not provided)
-            delay (tuple, optional): 请求间随机延迟范围（秒）
-                                    / Random delay range between requests (seconds)
-                - 如 (1, 3) 表示每次请求前随机等待 1-3 秒
-                - e.g., (1, 3) means random wait 1-3 seconds before each request
-                - 第一次请求不会延迟 / First request won't be delayed
-            auto_referer (bool): 是否自动添加 Referer（默认 True）
-                                / Whether to auto-add Referer (default: True)
-            static_ip (bool): 是否使用固定 IP 模式（默认 False）
-                             / Whether to use static IP mode (default False)
-            two_proxy (str, optional): 第二层代理配置
-                                      / Second layer proxy configuration
-                格式：host:port:user:pass 或 host:port
-            **kwargs: 保留参数，用于未来扩展 / Reserved for future extensions
-        
-        Example:
-            >>> session = cfspider.StealthSession(
-            ...     browser='chrome',
-            ...     cf_proxies='https://cfspider.violetqqcom.workers.dev',
-            ...     delay=(1, 3),
-            ...     auto_referer=True
-            ... )
-        """
         self.browser = browser
         self.cf_proxies = cf_proxies
         self.uuid = uuid
@@ -348,319 +315,156 @@ class StealthSession:
         self.two_proxy = two_proxy
         self.last_url = None
         self.request_count = 0
-        self._extra_kwargs = kwargs
-        
-        # 获取固定的浏览器请求头
-        self._base_headers = get_stealth_headers(browser)
-        
-        # Cookie 管理
-        self._cookies = {}
-    
-    def _prepare_headers(self, url: str, headers: Dict = None) -> Dict:
-        """准备请求头"""
-        final_headers = self._base_headers.copy()
-        
-        # 添加 Referer
-        if self.auto_referer and self.last_url:
-            parsed_current = urlparse(url)
-            parsed_last = urlparse(self.last_url)
-            
-            if parsed_current.netloc == parsed_last.netloc:
-                # 同站跳转
-                final_headers['Referer'] = self.last_url
-                final_headers = update_sec_fetch_headers(final_headers, 'same-origin')
-            else:
-                # 跨站跳转
-                final_headers['Referer'] = self.last_url
-                final_headers = update_sec_fetch_headers(final_headers, 'cross-site')
-        
-        # 合并自定义请求头
-        if headers:
-            final_headers.update(headers)
-        
-        return final_headers
-    
+
+        self._pw_browser = None
+        self._pw_context = None
+        self._playwright = None
+
+    def _resolve_proxy(self):
+        """Resolve cf_proxies string to a proxy URL usable by CloakBrowser"""
+        cf = self.cf_proxies
+        if not cf:
+            return None
+        if hasattr(cf, 'url'):
+            cf = getattr(cf, 'url', None) or str(cf)
+        if isinstance(cf, str):
+            if cf.startswith('socks5://'):
+                return cf
+            if cf.startswith('http://'):
+                return cf
+            if cf.startswith('https://'):
+                return 'http://' + cf[8:]
+        return None
+
+    def _ensure_browser(self):
+        """Lazy-init CloakBrowser (one browser per session)"""
+        if self._pw_context is not None:
+            return
+
+        proxy_url = self._resolve_proxy()
+        launch_opts = {"headless": True, "humanize": True}
+        if proxy_url and CLOAKBROWSER_AVAILABLE:
+            launch_opts["proxy"] = {"server": proxy_url}
+
+        if CLOAKBROWSER_AVAILABLE:
+            self._pw_browser = _cloak_launch_sync(**launch_opts)
+        else:
+            from playwright.sync_api import sync_playwright
+            self._playwright = sync_playwright().start()
+            self._pw_browser = self._playwright.chromium.launch(headless=True)
+
+        ctx_opts = {"ignore_https_errors": True}
+        if proxy_url and not CLOAKBROWSER_AVAILABLE:
+            ctx_opts["proxy"] = {"server": proxy_url}
+        self._pw_context = self._pw_browser.new_context(**ctx_opts)
+
     def _apply_delay(self):
-        """应用请求延迟"""
         if self.delay and self.request_count > 0:
             random_delay(self.delay[0], self.delay[1])
-    
-    def _update_cookies(self, response):
-        """
-        从响应中更新 cookies
-        
-        支持两种方式：
-        1. 从 response.cookies 获取（直接请求时）
-        2. 从响应头 Set-Cookie 解析（通过 Workers 代理时）
-        """
-        # 方式1：从 response.cookies 获取
-        if hasattr(response, 'cookies'):
-            try:
-                for cookie in response.cookies:
-                    if hasattr(cookie, 'name') and hasattr(cookie, 'value'):
-                        self._cookies[cookie.name] = cookie.value
-            except TypeError:
-                if hasattr(response.cookies, 'items'):
-                    for name, value in response.cookies.items():
-                        self._cookies[name] = value
-        
-        # 方式2：从响应头 Set-Cookie 解析（Workers 代理时需要）
-        if hasattr(response, 'headers'):
-            self._parse_set_cookie_headers(response.headers)
-    
-    def _parse_set_cookie_headers(self, headers):
-        """从响应头中解析 Set-Cookie"""
-        set_cookie_headers = []
-        
-        if hasattr(headers, 'get_all'):
-            set_cookie_headers = headers.get_all('set-cookie') or []
-        elif hasattr(headers, 'getlist'):
-            set_cookie_headers = headers.getlist('set-cookie') or []
-        else:
-            cookie_header = headers.get('set-cookie', '')
-            if cookie_header:
-                import re
-                parts = re.split(r',\s*(?=[A-Za-z_][A-Za-z0-9_-]*=)', cookie_header)
-                set_cookie_headers = [p.strip() for p in parts if p.strip()]
-        
-        for cookie_str in set_cookie_headers:
-            self._parse_single_cookie(cookie_str)
-    
-    def _parse_single_cookie(self, cookie_str):
-        """解析单个 Set-Cookie 字符串"""
-        if not cookie_str:
-            return
-        parts = cookie_str.split(';')
-        if not parts:
-            return
-        first_part = parts[0].strip()
-        if '=' not in first_part:
-            return
-        name, value = first_part.split('=', 1)
-        name = name.strip()
-        value = value.strip()
-        if name:
-            self._cookies[name] = value
+
+    def _make_request(self, method: str, url: str, **kwargs):
+        """Execute an HTTP request via CloakBrowser context.request"""
+        self._ensure_browser()
+        self._apply_delay()
+
+        req_opts = {}
+
+        # Auto-referer
+        if self.auto_referer and self.last_url:
+            req_opts["headers"] = {"Referer": self.last_url}
+
+        # Merge caller headers
+        if "headers" in kwargs:
+            h = dict(req_opts.get("headers", {}))
+            h.update(kwargs.pop("headers"))
+            req_opts["headers"] = h
+
+        # URL params
+        if "params" in kwargs:
+            params = kwargs.pop("params")
+            from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+            p = urlparse(url)
+            q = parse_qs(p.query)
+            q.update({k: [v] if not isinstance(v, list) else v for k, v in params.items()})
+            url = urlunparse(p._replace(query=urlencode(q, doseq=True)))
+
+        # Body
+        if "json" in kwargs:
+            import json as _j
+            req_opts["data"] = _j.dumps(kwargs.pop("json")).encode()
+            req_opts.setdefault("headers", {})["Content-Type"] = "application/json"
+        elif "data" in kwargs:
+            req_opts["data"] = kwargs.pop("data")
+
+        pw_resp = getattr(self._pw_context.request, method.lower())(url, **req_opts)
+        adapted = _CloakResponseAdapter(pw_resp)  # eager-reads all content immediately
+
+        from .api import CFSpiderResponse
+        cf_ray = adapted.headers.get('cf-ray', '')
+        cf_colo = cf_ray.split('-')[-1] if cf_ray else None
+        result = CFSpiderResponse(adapted, cf_colo=cf_colo, cf_ray=cf_ray or None)
+
+        self.last_url = url
+        self.request_count += 1
+        return result
     
     def get(self, url: str, **kwargs) -> Any:
-        """
-        发送 GET 请求 / Send GET request
-        
-        Args:
-            url (str): 目标 URL / Target URL
-            **kwargs: 其他参数 / Other parameters
-                - impersonate (str): TLS 指纹模拟 / TLS fingerprint impersonation
-                - http2 (bool): 启用 HTTP/2 / Enable HTTP/2
-                - 其他参数与 requests 库兼容 / Compatible with requests library
-        
-        Returns:
-            CFSpiderResponse: 响应对象 / Response object
-        """
-        from .api import get as _get
-        
-        self._apply_delay()
-        
-        headers = self._prepare_headers(url, kwargs.pop('headers', None))
-        
-        # 添加 Cookie
-        cookies = kwargs.pop('cookies', {})
-        cookies.update(self._cookies)
-        
-        # 提取可覆盖的参数，避免重复传递
-        uuid = kwargs.pop('uuid', None) or self.uuid
-        cf_proxies = kwargs.pop('cf_proxies', None) or self.cf_proxies
-        static_ip = kwargs.pop('static_ip', None)
-        if static_ip is None:
-            static_ip = getattr(self, 'static_ip', False)
-        two_proxy = kwargs.pop('two_proxy', None) or getattr(self, 'two_proxy', None)
-        
-        response = _get(
-            url,
-            cf_proxies=cf_proxies,
-            uuid=uuid,
-            static_ip=static_ip,
-            two_proxy=two_proxy,
-            headers=headers,
-            cookies=cookies,
-            **kwargs
-        )
-        
-        self._update_cookies(response)
-        self.last_url = url
-        self.request_count += 1
-        
-        return response
-    
+        return self._make_request('GET', url, **kwargs)
+
     def post(self, url: str, **kwargs) -> Any:
-        """
-        发送 POST 请求 / Send POST request
-        
-        Args:
-            url (str): 目标 URL / Target URL
-            **kwargs: 其他参数 / Other parameters
-        
-        Returns:
-            CFSpiderResponse: 响应对象 / Response object
-        """
-        from .api import post as _post
-        
-        self._apply_delay()
-        
-        headers = self._prepare_headers(url, kwargs.pop('headers', None))
-        
-        # POST 请求的特殊头
-        if 'json' in kwargs or 'data' in kwargs:
-            headers.setdefault('Content-Type', 'application/x-www-form-urlencoded')
-        
-        cookies = kwargs.pop('cookies', {})
-        cookies.update(self._cookies)
-        
-        # 提取可覆盖的参数，避免重复传递
-        uuid = kwargs.pop('uuid', None) or self.uuid
-        cf_proxies = kwargs.pop('cf_proxies', None) or self.cf_proxies
-        static_ip = kwargs.pop('static_ip', None)
-        if static_ip is None:
-            static_ip = getattr(self, 'static_ip', False)
-        two_proxy = kwargs.pop('two_proxy', None) or getattr(self, 'two_proxy', None)
-        
-        response = _post(
-            url,
-            cf_proxies=cf_proxies,
-            uuid=uuid,
-            static_ip=static_ip,
-            two_proxy=two_proxy,
-            headers=headers,
-            cookies=cookies,
-            **kwargs
-        )
-        
-        self._update_cookies(response)
-        self.last_url = url
-        self.request_count += 1
-        
-        return response
-    
+        return self._make_request('POST', url, **kwargs)
+
     def put(self, url: str, **kwargs) -> Any:
-        """发送 PUT 请求 / Send PUT request"""
-        from .api import put as _put
-        
-        self._apply_delay()
-        headers = self._prepare_headers(url, kwargs.pop('headers', None))
-        cookies = kwargs.pop('cookies', {})
-        cookies.update(self._cookies)
-        
-        # 提取可覆盖的参数，避免重复传递
-        uuid = kwargs.pop('uuid', None) or self.uuid
-        cf_proxies = kwargs.pop('cf_proxies', None) or self.cf_proxies
-        static_ip = kwargs.pop('static_ip', None)
-        if static_ip is None:
-            static_ip = getattr(self, 'static_ip', False)
-        two_proxy = kwargs.pop('two_proxy', None) or getattr(self, 'two_proxy', None)
-        
-        response = _put(
-            url,
-            cf_proxies=cf_proxies,
-            uuid=uuid,
-            static_ip=static_ip,
-            two_proxy=two_proxy,
-            headers=headers,
-            cookies=cookies,
-            **kwargs
-        )
-        self._update_cookies(response)
-        self.last_url = url
-        self.request_count += 1
-        return response
-    
+        return self._make_request('PUT', url, **kwargs)
+
     def delete(self, url: str, **kwargs) -> Any:
-        """发送 DELETE 请求 / Send DELETE request"""
-        from .api import delete as _delete
-        
-        self._apply_delay()
-        headers = self._prepare_headers(url, kwargs.pop('headers', None))
-        cookies = kwargs.pop('cookies', {})
-        cookies.update(self._cookies)
-        
-        # 提取可覆盖的参数，避免重复传递
-        uuid = kwargs.pop('uuid', None) or self.uuid
-        cf_proxies = kwargs.pop('cf_proxies', None) or self.cf_proxies
-        static_ip = kwargs.pop('static_ip', None)
-        if static_ip is None:
-            static_ip = getattr(self, 'static_ip', False)
-        two_proxy = kwargs.pop('two_proxy', None) or getattr(self, 'two_proxy', None)
-        
-        response = _delete(
-            url,
-            cf_proxies=cf_proxies,
-            uuid=uuid,
-            static_ip=static_ip,
-            two_proxy=two_proxy,
-            headers=headers,
-            cookies=cookies,
-            **kwargs
-        )
-        self._update_cookies(response)
-        self.last_url = url
-        self.request_count += 1
-        return response
-    
+        return self._make_request('DELETE', url, **kwargs)
+
     def head(self, url: str, **kwargs) -> Any:
-        """发送 HEAD 请求 / Send HEAD request"""
-        from .api import head as _head
-        
-        self._apply_delay()
-        headers = self._prepare_headers(url, kwargs.pop('headers', None))
-        cookies = kwargs.pop('cookies', {})
-        cookies.update(self._cookies)
-        
-        # 提取可覆盖的参数，避免重复传递
-        uuid = kwargs.pop('uuid', None) or self.uuid
-        cf_proxies = kwargs.pop('cf_proxies', None) or self.cf_proxies
-        static_ip = kwargs.pop('static_ip', None)
-        if static_ip is None:
-            static_ip = getattr(self, 'static_ip', False)
-        two_proxy = kwargs.pop('two_proxy', None) or getattr(self, 'two_proxy', None)
-        
-        response = _head(
-            url,
-            cf_proxies=cf_proxies,
-            uuid=uuid,
-            static_ip=static_ip,
-            two_proxy=two_proxy,
-            headers=headers,
-            cookies=cookies,
-            **kwargs
-        )
-        self._update_cookies(response)
-        self.last_url = url
-        self.request_count += 1
-        return response
-    
+        return self._make_request('HEAD', url, **kwargs)
+
     def get_cookies(self) -> Dict[str, str]:
-        """获取当前会话的所有 Cookie"""
-        return self._cookies.copy()
-    
+        """Browser context 自动管理 Cookie"""
+        if self._pw_context:
+            return {c['name']: c['value'] for c in self._pw_context.cookies()}
+        return {}
+
     def set_cookie(self, name: str, value: str):
-        """设置 Cookie"""
-        self._cookies[name] = value
-    
+        if self._pw_context:
+            self._pw_context.add_cookies([{"name": name, "value": value, "url": "https://example.com"}])
+
     def clear_cookies(self):
-        """清除所有 Cookie"""
-        self._cookies.clear()
-    
+        if self._pw_context:
+            self._pw_context.clear_cookies()
+
     def get_headers(self) -> Dict[str, str]:
-        """获取当前会话的基础请求头"""
-        return self._base_headers.copy()
-    
+        return get_stealth_headers(self.browser)
+
     def close(self):
-        """关闭会话"""
-        pass  # 无需清理，每次请求都是独立的
-    
+        if self._pw_context:
+            try: self._pw_context.close()
+            except: pass
+        if self._pw_browser:
+            try: self._pw_browser.close()
+            except: pass
+        if self._playwright:
+            try: self._playwright.stop()
+            except: pass
+        self._pw_context = None
+        self._pw_browser = None
+        self._playwright = None
+
     def __enter__(self):
         return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
+
+    def __exit__(self, *args):
         self.close()
+
+
+def _cloak_single_request(method: str, url: str, cf_proxies=None, uuid=None, two_proxy=None, **kwargs) -> Any:
+    """Single-shot CloakBrowser request (used by api.py stealth=True)"""
+    with StealthSession(cf_proxies=cf_proxies, uuid=uuid, two_proxy=two_proxy) as sess:
+        return getattr(sess, method.lower())(url, **kwargs)
 
 
 # 支持的浏览器列表
