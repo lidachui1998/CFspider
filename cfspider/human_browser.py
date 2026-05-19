@@ -50,6 +50,23 @@ import os
 from typing import Optional, List, Tuple, Dict, Any, Union
 from pathlib import Path
 
+# CloakBrowser 优先（源码级 C++ 反检测，30/30 测试全过），其次 Playwright
+CLOAKBROWSER_AVAILABLE = False
+PLAYWRIGHT_ASYNC_AVAILABLE = False
+
+try:
+    from cloakbrowser import launch_async as _cloak_launch_async
+    CLOAKBROWSER_AVAILABLE = True
+except ImportError:
+    pass
+
+if not CLOAKBROWSER_AVAILABLE:
+    try:
+        from playwright.async_api import async_playwright as _async_playwright
+        PLAYWRIGHT_ASYNC_AVAILABLE = True
+    except ImportError:
+        pass
+
 
 # 贝塞尔曲线计算
 def _bezier_curve(points: List[Tuple[float, float]], t: float) -> Tuple[float, float]:
@@ -176,26 +193,22 @@ class HumanBrowser:
         self.cf_proxies = cf_proxies
         self.uuid = uuid
         self.headless = headless
-        self.chrome_path = chrome_path or self._find_chrome()
+        try:
+            self.chrome_path = chrome_path or self._find_chrome()
+        except FileNotFoundError:
+            self.chrome_path = chrome_path
         self.remote_debugging_port = remote_debugging_port
         self.user_data_dir = user_data_dir
         self.auto_start_chrome = auto_start_chrome
         self.human_like = human_like
         self.viewport = viewport
         
-        self._chrome_process = None
-        self._ws_url = None
-        self._session = None
-        self._page_id = None
+        self._pw_browser = None
+        self._playwright_ctx = None
+        self._context = None
+        self._page = None
+        self._vless_proxy = None
         self._mouse_position = (0, 0)
-        self._connected = False
-        
-        # 尝试导入 websockets
-        try:
-            import websockets
-            self._websockets = websockets
-        except ImportError:
-            self._websockets = None
     
     def _find_chrome(self) -> str:
         """查找 Chrome 可执行文件路径"""
@@ -234,54 +247,43 @@ class HumanBrowser:
         raise FileNotFoundError("无法找到 Chrome 浏览器，请手动指定 chrome_path")
     
     async def start(self):
-        """启动浏览器并连接"""
-        if self.auto_start_chrome:
-            await self._start_chrome()
+        """启动浏览器（CloakBrowser 源码级反检测 + 人类行为模拟）"""
+        if not CLOAKBROWSER_AVAILABLE and not PLAYWRIGHT_ASYNC_AVAILABLE:
+            raise ImportError(
+                "请安装 cloakbrowser（推荐，源码级反检测）: pip install cloakbrowser\n"
+                "或安装 playwright: pip install playwright && playwright install chromium"
+            )
         
-        await self._connect()
-        await self._setup_page()
-    
-    async def _start_chrome(self):
-        """启动 Chrome 浏览器"""
-        args = [
-            self.chrome_path,
-            f"--remote-debugging-port={self.remote_debugging_port}",
-        ]
-        
-        if self.headless:
-            args.append("--headless=new")
-        
-        if self.user_data_dir:
-            args.append(f"--user-data-dir={self.user_data_dir}")
-        else:
-            # 使用临时目录
-            import tempfile
-            temp_dir = tempfile.mkdtemp(prefix="cfspider_chrome_")
-            args.append(f"--user-data-dir={temp_dir}")
-        
-        # 禁用自动化检测特征
-        args.extend([
-            "--disable-blink-features=AutomationControlled",
-            "--disable-infobars",
-            "--no-first-run",
-            "--no-default-browser-check",
-            f"--window-size={self.viewport[0]},{self.viewport[1]}",
-        ])
-        
-        # 如果使用代理
+        # 设置代理
+        proxy_config = None
         if self.cf_proxies:
             proxy_url = await self._setup_proxy()
             if proxy_url:
-                args.append(f"--proxy-server={proxy_url}")
+                proxy_config = {"server": proxy_url}
         
-        self._chrome_process = subprocess.Popen(
-            args,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
+        ctx_opts = {
+            "ignore_https_errors": True,
+            "viewport": {"width": self.viewport[0], "height": self.viewport[1]},
+        }
+        if proxy_config:
+            ctx_opts["proxy"] = proxy_config
         
-        # 等待 Chrome 启动
-        await asyncio.sleep(2)
+        if CLOAKBROWSER_AVAILABLE:
+            # CloakBrowser：49 个 C++ 源码级补丁，humanize=True 人类行为检测通过
+            self._pw_browser = await _cloak_launch_async(
+                headless=self.headless,
+                humanize=True,
+            )
+        else:
+            # Playwright fallback
+            self._playwright_ctx = await _async_playwright().start()
+            self._pw_browser = await self._playwright_ctx.chromium.launch(
+                headless=self.headless,
+                args=["--disable-blink-features=AutomationControlled"],
+            )
+        
+        self._context = await self._pw_browser.new_context(**ctx_opts)
+        self._page = await self._context.new_page()
     
     async def _setup_proxy(self) -> Optional[str]:
         """设置代理"""
@@ -310,125 +312,6 @@ class HumanBrowser:
             print(f"[HumanBrowser] 代理设置失败: {e}")
             return None
     
-    async def _connect(self):
-        """连接到 Chrome DevTools"""
-        import aiohttp
-        
-        # 确保 websockets 已安装
-        if not self._websockets:
-            try:
-                import websockets
-                self._websockets = websockets
-            except ImportError:
-                raise ImportError("请安装 websockets: pip install websockets")
-        
-        # 获取 WebSocket URL
-        url = f"http://127.0.0.1:{self.remote_debugging_port}/json/version"
-        
-        for _ in range(10):  # 重试 10 次
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            self._ws_url = data.get("webSocketDebuggerUrl")
-                            break
-            except:
-                await asyncio.sleep(0.5)
-        
-        if not self._ws_url:
-            raise ConnectionError(f"无法连接到 Chrome DevTools (端口 {self.remote_debugging_port})")
-        
-        # 连接 WebSocket
-        self._session = await self._websockets.connect(self._ws_url)
-        self._connected = True
-    
-    async def _send_command(self, method: str, params: Dict = None) -> Dict:
-        """发送 CDP 命令"""
-        if not self._connected:
-            raise ConnectionError("未连接到浏览器")
-        
-        import json
-        
-        msg_id = random.randint(1, 1000000)
-        message = {
-            "id": msg_id,
-            "method": method,
-            "params": params or {}
-        }
-        
-        await self._session.send(json.dumps(message))
-        
-        # 等待响应
-        while True:
-            response = await self._session.recv()
-            data = json.loads(response)
-            if data.get("id") == msg_id:
-                if "error" in data:
-                    raise Exception(f"CDP 错误: {data['error']}")
-                return data.get("result", {})
-    
-    async def _setup_page(self):
-        """设置页面"""
-        # 获取页面列表
-        import aiohttp
-        
-        url = f"http://127.0.0.1:{self.remote_debugging_port}/json"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as resp:
-                pages = await resp.json()
-        
-        if pages:
-            self._page_id = pages[0].get("id")
-            page_ws_url = pages[0].get("webSocketDebuggerUrl")
-            
-            # 重新连接到页面
-            if self._session:
-                await self._session.close()
-            if page_ws_url and self._websockets:
-                self._session = await self._websockets.connect(page_ws_url)
-                self._connected = True
-        
-        # 设置视口
-        await self._send_command("Emulation.setDeviceMetricsOverride", {
-            "width": self.viewport[0],
-            "height": self.viewport[1],
-            "deviceScaleFactor": 1,
-            "mobile": False
-        })
-        
-        # 隐藏自动化特征
-        await self._send_command("Page.addScriptToEvaluateOnNewDocument", {
-            "source": """
-                // 隐藏 webdriver 标志
-                Object.defineProperty(navigator, 'webdriver', {
-                    get: () => undefined
-                });
-                
-                // 隐藏 Chrome 自动化
-                Object.defineProperty(navigator, 'plugins', {
-                    get: () => [1, 2, 3, 4, 5]
-                });
-                
-                // 隐藏 languages
-                Object.defineProperty(navigator, 'languages', {
-                    get: () => ['zh-CN', 'zh', 'en-US', 'en']
-                });
-                
-                // 修复 Chrome 检测
-                window.chrome = {
-                    runtime: {}
-                };
-                
-                // 修复权限检测
-                const originalQuery = window.navigator.permissions.query;
-                window.navigator.permissions.query = (parameters) => (
-                    parameters.name === 'notifications' ?
-                        Promise.resolve({ state: Notification.permission }) :
-                        originalQuery(parameters)
-                );
-            """
-        })
     
     async def goto(self, url: str, wait_until: str = "load") -> str:
         """
@@ -441,49 +324,24 @@ class HumanBrowser:
         Returns:
             页面 HTML
         """
-        await self._send_command("Page.enable")
-        await self._send_command("Page.navigate", {"url": url})
-        
-        # 等待页面加载
-        await asyncio.sleep(2)
-        
-        # 如果启用人类行为，模拟阅读
+        await self._page.goto(url, wait_until=wait_until)
         if self.human_like:
             await self._simulate_reading()
-        
-        return await self.html()
+        return await self._page.content()
     
     async def html(self) -> str:
         """获取页面 HTML"""
-        result = await self._send_command("Runtime.evaluate", {
-            "expression": "document.documentElement.outerHTML"
-        })
-        return result.get("result", {}).get("value", "")
+        return await self._page.content()
     
     async def _get_element_center(self, selector: str) -> Tuple[float, float]:
         """获取元素中心坐标"""
-        result = await self._send_command("Runtime.evaluate", {
-            "expression": f"""
-                (function() {{
-                    const el = document.querySelector('{selector}');
-                    if (!el) return null;
-                    const rect = el.getBoundingClientRect();
-                    return {{
-                        x: rect.left + rect.width / 2,
-                        y: rect.top + rect.height / 2,
-                        width: rect.width,
-                        height: rect.height
-                    }};
-                }})()
-            """,
-            "returnByValue": True
-        })
-        
-        value = result.get("result", {}).get("value")
-        if not value:
+        element = await self._page.query_selector(selector)
+        if not element:
             raise ValueError(f"找不到元素: {selector}")
-        
-        return value["x"], value["y"]
+        box = await element.bounding_box()
+        if not box:
+            raise ValueError(f"元素不可见: {selector}")
+        return box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
     
     async def human_move_to(self, x: float, y: float):
         """
@@ -512,12 +370,7 @@ class HumanBrowser:
         
         # 沿路径移动
         for px, py in path:
-            await self._send_command("Input.dispatchMouseEvent", {
-                "type": "mouseMoved",
-                "x": int(px),
-                "y": int(py)
-            })
-            # 随机延迟
+            await self._page.mouse.move(px, py)
             await asyncio.sleep(random.uniform(0.005, 0.02))
         
         self._mouse_position = (x, y)
@@ -549,26 +402,10 @@ class HumanBrowser:
         if self.human_like:
             await asyncio.sleep(random.uniform(0.05, 0.15))
         
-        # 鼠标按下
-        await self._send_command("Input.dispatchMouseEvent", {
-            "type": "mousePressed",
-            "x": int(target_x),
-            "y": int(target_y),
-            "button": button,
-            "clickCount": 1
-        })
-        
-        # 按下持续时间
+        # 鼠标按下 → 释放
+        await self._page.mouse.down(button=button)
         await asyncio.sleep(random.uniform(0.05, 0.15))
-        
-        # 鼠标释放
-        await self._send_command("Input.dispatchMouseEvent", {
-            "type": "mouseReleased",
-            "x": int(target_x),
-            "y": int(target_y),
-            "button": button,
-            "clickCount": 1
-        })
+        await self._page.mouse.up(button=button)
         
         # 点击后短暂等待
         if self.human_like:
@@ -588,25 +425,9 @@ class HumanBrowser:
         
         # 清空现有内容
         if clear:
-            await self._send_command("Input.dispatchKeyEvent", {
-                "type": "keyDown",
-                "key": "a",
-                "modifiers": 2  # Ctrl
-            })
-            await self._send_command("Input.dispatchKeyEvent", {
-                "type": "keyUp",
-                "key": "a",
-                "modifiers": 2
-            })
+            await self._page.keyboard.press("Control+a")
             await asyncio.sleep(0.1)
-            await self._send_command("Input.dispatchKeyEvent", {
-                "type": "keyDown",
-                "key": "Backspace"
-            })
-            await self._send_command("Input.dispatchKeyEvent", {
-                "type": "keyUp",
-                "key": "Backspace"
-            })
+            await self._page.keyboard.press("Delete")
             await asyncio.sleep(0.1)
         
         # 逐字输入
@@ -614,20 +435,13 @@ class HumanBrowser:
             # 偶尔打错字再删除（更真实）
             if self.human_like and random.random() < 0.03:
                 wrong_char = random.choice('abcdefghijklmnopqrstuvwxyz')
-                await self._send_command("Input.insertText", {"text": wrong_char})
+                await self._page.keyboard.insert_text(wrong_char)
                 await asyncio.sleep(_typing_delay())
-                await self._send_command("Input.dispatchKeyEvent", {
-                    "type": "keyDown",
-                    "key": "Backspace"
-                })
-                await self._send_command("Input.dispatchKeyEvent", {
-                    "type": "keyUp",
-                    "key": "Backspace"
-                })
+                await self._page.keyboard.press("Backspace")
                 await asyncio.sleep(_typing_delay())
             
             # 输入正确字符
-            await self._send_command("Input.insertText", {"text": char})
+            await self._page.keyboard.insert_text(char)
             
             # 打字延迟
             if self.human_like:
@@ -652,13 +466,7 @@ class HumanBrowser:
         step_distance = distance / num_steps
         
         for _ in range(num_steps):
-            await self._send_command("Input.dispatchMouseEvent", {
-                "type": "mouseWheel",
-                "x": self._mouse_position[0],
-                "y": self._mouse_position[1],
-                "deltaX": 0,
-                "deltaY": step_distance
-            })
+            await self._page.mouse.wheel(0, step_distance)
             
             # 随机延迟
             if self.human_like:
@@ -683,47 +491,39 @@ class HumanBrowser:
     
     async def wait_for_selector(self, selector: str, timeout: int = 30):
         """等待元素出现"""
-        start = time.time()
-        while time.time() - start < timeout:
-            result = await self._send_command("Runtime.evaluate", {
-                "expression": f"document.querySelector('{selector}') !== null"
-            })
-            if result.get("result", {}).get("value"):
-                return True
-            await asyncio.sleep(0.5)
-        raise TimeoutError(f"等待元素超时: {selector}")
+        await self._page.wait_for_selector(selector, timeout=timeout * 1000)
+        return True
     
     async def screenshot(self, path: str = None) -> bytes:
         """截图"""
-        result = await self._send_command("Page.captureScreenshot", {
-            "format": "png"
-        })
-        
-        import base64
-        data = base64.b64decode(result.get("data", ""))
-        
-        if path:
-            with open(path, "wb") as f:
-                f.write(data)
-        
-        return data
+        return await self._page.screenshot(path=path)
     
     async def evaluate(self, expression: str) -> Any:
         """执行 JavaScript"""
-        result = await self._send_command("Runtime.evaluate", {
-            "expression": expression,
-            "returnByValue": True
-        })
-        return result.get("result", {}).get("value")
+        return await self._page.evaluate(expression)
     
     async def close(self):
         """关闭浏览器"""
-        if self._session:
-            await self._session.close()
-        
-        if self._chrome_process:
-            self._chrome_process.terminate()
-            self._chrome_process.wait()
+        if self._context:
+            try:
+                await self._context.close()
+            except:
+                pass
+        if self._pw_browser:
+            try:
+                await self._pw_browser.close()
+            except:
+                pass
+        if self._playwright_ctx:
+            try:
+                await self._playwright_ctx.stop()
+            except:
+                pass
+        if self._vless_proxy:
+            try:
+                self._vless_proxy.stop()
+            except:
+                pass
     
     async def __aenter__(self):
         await self.start()

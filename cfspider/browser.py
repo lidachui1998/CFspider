@@ -68,13 +68,22 @@ def parse_vless_link(vless_link):
     except Exception:
         return None
 
+CLOAKBROWSER_AVAILABLE = False
+PLAYWRIGHT_AVAILABLE = False
+
 try:
-    from playwright.sync_api import sync_playwright, Page, Browser as PlaywrightBrowser
-    PLAYWRIGHT_AVAILABLE = True
+    from cloakbrowser import launch as _cloak_launch_sync
+    CLOAKBROWSER_AVAILABLE = True
 except ImportError:
-    PLAYWRIGHT_AVAILABLE = False
-    Page = None
-    PlaywrightBrowser = None
+    pass
+
+if not CLOAKBROWSER_AVAILABLE:
+    try:
+        from playwright.sync_api import sync_playwright, Page, Browser as PlaywrightBrowser
+        PLAYWRIGHT_AVAILABLE = True
+    except ImportError:
+        Page = None
+        PlaywrightBrowser = None
 
 
 class BrowserNotInstalledError(Exception):
@@ -152,9 +161,10 @@ class Browser:
             >>> # 使用 HTTP 代理
             >>> browser = Browser(cf_proxies="127.0.0.1:8080")
         """
-        if not PLAYWRIGHT_AVAILABLE:
+        if not CLOAKBROWSER_AVAILABLE and not PLAYWRIGHT_AVAILABLE:
             raise PlaywrightNotInstalledError(
-                "Playwright 未安装，请运行: pip install cfspider[browser]"
+                "请安装 cloakbrowser（推荐，源码级反检测）: pip install cloakbrowser\n"
+                "或安装 playwright: pip install cfspider[browser]"
             )
         
         self.cf_proxies = cf_proxies
@@ -162,6 +172,13 @@ class Browser:
         self.timeout = timeout
         self.two_proxy = two_proxy
         self._vless_proxy = None
+        self._playwright = None
+        self._browser = None
+        self._context = None
+        
+        # 支持 WorkersManager 对象
+        if hasattr(cf_proxies, 'url'):
+            cf_proxies = getattr(cf_proxies, 'url', None) or str(cf_proxies)
         
         # 解析代理地址
         proxy_url = None
@@ -169,30 +186,26 @@ class Browser:
             # 1. 检查是否是 VLESS 链接
             vless_info = parse_vless_link(cf_proxies)
             if vless_info:
-                # 使用 VLESS 链接
                 ws_url = f"wss://{vless_info['host']}{vless_info['path']}"
                 self._vless_proxy = LocalVlessProxy(ws_url, vless_info['uuid'], two_proxy=two_proxy)
                 port = self._vless_proxy.start()
                 proxy_url = f"http://127.0.0.1:{port}"
             # 2. HTTP/SOCKS5 代理格式
-            elif cf_proxies.startswith('http://') or cf_proxies.startswith('https://') or cf_proxies.startswith('socks5://'):
-                # 如果是 CFspider Workers URL，尝试获取 UUID
+            elif cf_proxies.startswith(('http://', 'https://', 'socks5://')):
                 if 'workers.dev' in cf_proxies or not uuid:
                     uuid = uuid or self._get_workers_uuid(cf_proxies)
                 if uuid:
-                    # 使用 VLESS 代理
                     hostname = cf_proxies.replace('https://', '').replace('http://', '').split('/')[0]
                     ws_url = f'wss://{hostname}/{uuid}'
                     self._vless_proxy = LocalVlessProxy(ws_url, uuid, two_proxy=two_proxy)
                     port = self._vless_proxy.start()
                     proxy_url = f"http://127.0.0.1:{port}"
                 else:
-                    # 直接使用 HTTP 代理
                     proxy_url = cf_proxies
             # 3. IP:PORT 格式
             elif ':' in cf_proxies and cf_proxies.replace('.', '').replace(':', '').isdigit():
                 proxy_url = f"http://{cf_proxies}"
-            # 4. 域名方式（尝试自动获取 UUID）
+            # 4. 域名方式
             else:
                 hostname = cf_proxies.replace('wss://', '').replace('ws://', '').split('/')[0]
                 uuid = uuid or self._get_workers_uuid(f"https://{hostname}")
@@ -203,6 +216,37 @@ class Browser:
                     proxy_url = f"http://127.0.0.1:{port}"
                 else:
                     proxy_url = f"http://{cf_proxies}"
+        
+        # 启动浏览器（CloakBrowser 优先，源码级 C++ 反检测补丁）
+        launch_options = {"headless": headless}
+        if proxy_url:
+            launch_options["proxy"] = {"server": proxy_url}
+        
+        if CLOAKBROWSER_AVAILABLE:
+            launch_options["humanize"] = True
+            try:
+                self._browser = _cloak_launch_sync(**launch_options)
+            except Exception as e:
+                if self._vless_proxy:
+                    self._vless_proxy.stop()
+                raise
+        else:
+            self._playwright = sync_playwright().start()
+            try:
+                self._browser = self._playwright.chromium.launch(**launch_options)
+            except Exception as e:
+                if self._vless_proxy:
+                    self._vless_proxy.stop()
+                self._playwright.stop()
+                if "Executable doesn't exist" in str(e):
+                    raise BrowserNotInstalledError(
+                        "Chromium 未安装，请运行: cfspider install\n"
+                        "或安装 cloakbrowser: pip install cloakbrowser（推荐，反检测更强）"
+                    )
+                raise
+        
+        self._context = self._browser.new_context(ignore_https_errors=True)
+        self._context.set_default_timeout(timeout * 1000)
     
     def _get_workers_uuid(self, workers_url):
         """从 Workers 获取 UUID / Get UUID from Workers"""
@@ -230,32 +274,6 @@ class Browser:
             pass
         
         return None
-        
-        # 启动 Playwright
-        self._playwright = sync_playwright().start()
-        
-        # 启动浏览器
-        launch_options = {"headless": headless}
-        if proxy_url:
-            launch_options["proxy"] = {"server": proxy_url}
-        
-        try:
-            self._browser = self._playwright.chromium.launch(**launch_options)
-        except Exception as e:
-            if self._vless_proxy:
-                self._vless_proxy.stop()
-            self._playwright.stop()
-            if "Executable doesn't exist" in str(e):
-                raise BrowserNotInstalledError(
-                    "Chromium 浏览器未安装，请运行: cfspider install"
-                )
-            raise
-        
-        # 创建默认上下文
-        self._context = self._browser.new_context(
-            ignore_https_errors=True
-        )
-        self._context.set_default_timeout(timeout * 1000)
     
     def get(self, url):
         """
@@ -371,10 +389,11 @@ class Browser:
         except:
             pass
         
-        try:
-            self._playwright.stop()
-        except:
-            pass
+        if self._playwright:
+            try:
+                self._playwright.stop()
+            except:
+                pass
         
         if self._vless_proxy:
             try:

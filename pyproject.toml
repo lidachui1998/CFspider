@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cfspider"
-version = "1.9.2"
+version = "1.9.3"
 description = "Cloudflare Workers proxy IP pool client"
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -33,14 +33,13 @@ dependencies = [
     "openpyxl>=3.0.0",
     # 进度条显示
     "tqdm>=4.60.0",
-    # CDP 连接（人类行为模拟）
-    "aiohttp>=3.8.0",
-    "websockets>=10.0",
 ]
 
 [project.optional-dependencies]
-# 浏览器自动化
-browser = ["playwright>=1.40.0"]
+# 浏览器自动化（源码级反检测，推荐）
+browser = ["cloakbrowser>=0.3.0"]
+# 浏览器自动化（Playwright 基础版）
+browser-playwright = ["playwright>=1.40.0"]
 # XPath 数据提取
 xpath = ["lxml>=4.9.0"]
 # JSONPath 数据提取
@@ -56,20 +55,18 @@ extract = [
     "openpyxl>=3.0.0",
     "tqdm>=4.60.0",
 ]
-# 人类行为模拟浏览器
-human = [
-    "aiohttp>=3.8.0",
-    "websockets>=10.0",
-]
+# 人类行为模拟浏览器（CloakBrowser 推荐）
+human = ["cloakbrowser>=0.3.0"]
+# stealth 全套方案
+stealth = ["cloakbrowser>=0.3.0", "curl_cffi>=0.5.0"]
 # 全部可选功能
 all = [
-    "playwright>=1.40.0",
+    "cloakbrowser>=0.3.0",
+    "curl_cffi>=0.5.0",
     "lxml>=4.9.0",
     "jsonpath-ng>=1.5.0",
     "openpyxl>=3.0.0",
     "tqdm>=4.60.0",
-    "aiohttp>=3.8.0",
-    "websockets>=10.0",
 ]
 
 [project.scripts]
