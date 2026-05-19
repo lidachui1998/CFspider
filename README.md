@@ -235,6 +235,60 @@ asyncio.run(main())
 
 ---
 
+## cfspider-browser — AI 智能浏览器
+
+**cfspider-browser** 是基于 Electron + React 的 AI 驱动智能浏览器，通过自然语言对话控制浏览器，像真人一样操作网页。
+
+### 核心功能
+
+- **AI 智能助手**：通过自然语言对话控制浏览器，支持多种 AI 模型（Ollama、OpenAI、DeepSeek、Moonshot 等）
+- **真人模拟操作**：AI 像真人一样点击、输入、滚动，完整展示操作过程
+- **虚拟鼠标**：可视化鼠标移动和点击动画，直观展示 AI 操作
+- **真人学习系统**：像真人一样学习，记住成功经验，避免重复错误
+- **视频总结**：通过视觉模型分析视频内容，支持最多 40 帧分析
+
+### 快速开始
+
+```bash
+cd cfspider-browser
+npm install
+npm run electron:dev
+```
+
+### 配置 AI
+
+1. 点击右上角设置按钮
+2. 选择 AI 服务商或自定义 API 地址
+3. 输入 API 密钥
+4. 选择模型
+
+支持的 AI 服务商：Ollama（本地运行，无需 API Key）、OpenAI、DeepSeek、Groq、Moonshot (Kimi)、智谱 AI、通义千问、SiliconFlow 及其他 OpenAI 兼容 API。
+
+### 使用方法
+
+点击右下角蓝色按钮打开 AI 对话框，输入自然语言指令：
+
+- "打开 GitHub" — AI 会通过搜索引擎搜索并点击打开
+- "搜索 Python 教程" — 在当前搜索引擎搜索
+- "把搜索引擎改成谷歌" — 切换默认搜索引擎
+- "在 GitHub 搜索 vue" — 先打开 GitHub 再搜索
+- "返回上一页" — 点击后退
+
+### 技术栈
+
+- **Electron** — 桌面应用框架
+- **React 18** — UI 框架
+- **TypeScript** — 类型安全
+- **Tailwind CSS** — 样式
+- **Zustand** — 状态管理
+- **Vite** — 构建工具
+
+### 详细文档
+
+完整文档请查看 [cfspider-browser/README.md](cfspider-browser/README.md)
+
+---
+
 ## API 参数参考
 
 ### 请求方法
