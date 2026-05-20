@@ -26,6 +26,7 @@
 > 注册即可领取 5GB 免费流量，支持全平台客户端，稳定快速。邀请码：**`aVDxxRS0`**
 >
 > **如果你需要爬虫代理 IP，推荐以下服务：**
+> - **Thordata**：[https://thordata.com/](https://thordata.com/) — 住宅代理 IP，支持多语言 SDK 集成，高匿名稳定,输入专属优惠码CFspider还可获得10%的优惠（[查看集成方案](#代理-ip-集成方案)）
 > - **Cliproxy**：[https://dash.cliproxy.com/](https://dash.cliproxy.com/) — 爬虫 HTTP/SOCKS5，高速稳定
 > - **1024proxy**：[https://1024proxy.com/](https://1024proxy.com/) — 住宅 IP，低至 $0.49/GB
 > - **Novproxy**：[https://novproxy.com/](https://novproxy.com/) — 1 亿+ 住宅 IP，90 国家，$0.5/GB
@@ -327,7 +328,7 @@ cfspider.request(method, url, **kwargs)
 | `headers` | dict | None | 自定义请求头 |
 | `cookies` | dict | None | Cookies |
 | `timeout` | int/float | 30 | 超时时间（秒） |
-| `proxies` | dict | None | 普通 HTTP/SOCKS5 代理 |
+| `proxies` | dict | None | 普通 HTTP/SOCKS5 代理（[示例](#代理-ip-集成方案)） |
 
 ### 响应对象
 
@@ -342,6 +343,62 @@ r.cf_colo       # Cloudflare 节点代码（如 NRT）
 r.cf_ray        # Cloudflare Ray ID
 r.js_result     # js_eval 执行结果（browser=True 时）
 ```
+
+---
+
+## 代理 IP 集成方案
+
+将第三方代理 IP 服务无缝集成至 CFspider，结合 CloakBrowser 反检测能力，实现高匿名、高成功率的自动化数据采集。
+
+![Thordata 代理集成方案](IP质量检测.png)
+
+### Thordata 住宅代理集成
+
+```python
+import cfspider
+
+# 基础集成：普通 HTTP 代理
+proxies = {
+    'http': 'http://USERNAME:PASSWORD@user.pr.thordata.com:9999',
+    'https': 'http://USERNAME:PASSWORD@user.pr.thordata.com:9999'
+}
+
+r = cfspider.get("https://ipinfo.thordata.com", proxies=proxies)
+print(r.json())
+```
+
+**结合 CloakBrowser 反检测（推荐）**
+
+```python
+# 住宅代理 + Stealth 反检测：真实 TLS 指纹 + 住宅 IP
+r = cfspider.get("https://example.com",
+                 proxies=proxies,
+                 stealth=True)
+print(r.text)
+
+# 住宅代理 + Browser 完整渲染：绕过 CAPTCHA + 住宅 IP
+r = cfspider.get("https://protected-site.com",
+                 proxies=proxies,
+                 browser=True,
+                 wait_until="networkidle")
+print(r.text)
+```
+
+**多语言 SDK 示例**
+
+| 语言 | 集成代码 |
+|------|----------|
+| **Python** | `cfspider.get(url, proxies={'http': 'http://user:pass@proxy:port'})` |
+| **cURL** | `curl -x http://user:pass@proxy:port https://example.com` |
+| **Node.js** | 使用 `https-proxy-agent` 配合请求库 |
+| **Go** | 设置 `http.Transport` 的 `Proxy` 字段 |
+
+> 💡 **为什么需要代理 IP？**
+> - 避免 IP 被封禁，支持高频请求
+> - 模拟真实用户地理位置
+> - 结合 CloakBrowser 实现**指纹 + IP** 双重伪装
+
+**国内无法直连？** 使用 [`two_proxy`](https://github.com/violettoolssite/CFspider#%E5%8F%82%E6%95%B0%E5%88%97%E8%A1%A8) 双层代理：`cfspider.get(url, proxies=proxies, two_proxy="host:port:user:pass")`
 
 ---
 
