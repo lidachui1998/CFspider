@@ -23,7 +23,7 @@
 > - **CF 官方封禁 VLESS Workers（错误代码 1101）**：Cloudflare 已开始主动检测并封禁通过 Worker 建立的 VLESS 隧道，越来越多用户遇到 1101 错误
 >
 > **如果你需要稳定翻墙，我们强烈推荐 [VPN Cheap](https://siusn-sisjxl.top/#/register?code=aVDxxRS0)**  
-> 注册即可领取 5GB 免费流量，支持全平台客户端，稳定快速。邀请码：**`aVDxxRS0`**
+> 填写我的邀请码可获免费 5GB/月流量，支持全平台客户端，稳定快速。[👉 点击注册](https://siusn-sisjxl.top/#/register?code=aVDxxRS0) 邀请码：**`aVDxxRS0`**
 >
 > **如果你需要爬虫代理 IP，推荐以下服务：**
 > - **Thordata**：[https://thordata.com/](https://thordata.com/) — 住宅代理 IP，支持多语言 SDK 集成，高匿名稳定（[查看集成方案](#代理-ip-集成方案)）
