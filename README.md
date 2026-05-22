@@ -5,29 +5,6 @@
 [![License](https://img.shields.io/github/license/violettoolssite/CFspider)](LICENSE)
 [![Update VLESS Configs](https://github.com/violettoolssite/CFspider/actions/workflows/update-vless-configs.yml/badge.svg)](https://github.com/violettoolssite/CFspider/actions/workflows/update-vless-configs.yml)
 
-## Cloudflare 节点配置（VLESS 免费节点）
-
-> 本区域提供可直接复制导入的 VLESS / Trojan / SS 节点配置，每 **20 分钟**自动刷新。
->
-> 配置来源：[igareck/vpn-configs-for-russia](https://github.com/igareck/vpn-configs-for-russia)
-
-### 使用方法
-
-1. 复制下方配置（或直接下载 [`vless-configs.txt`](vless-configs.txt)）
-2. 导入到支持 VLESS 的客户端（v2rayN / Clash / NekoBox / Hiddify 等）
-3. 配置每天自动更新，无需手动操作
-
-### 最新配置
-
-<!-- VLESS_CONFIGS_START -->
-> 配置文件每 20 分钟由 GitHub Actions 自动更新，[点击查看完整配置](vless-configs.txt)
->
-> 或直接复制订阅链接导入客户端：
-> ```
-> https://raw.githubusercontent.com/violettoolssite/CFspider/main/vless-configs.txt
-> ```
-<!-- VLESS_CONFIGS_END -->
-
 ---
 
 **v1.9.4** — Cloudflare Workers 免费代理 IP 池 + CloakBrowser 深度反检测
@@ -47,6 +24,13 @@
 > - VLESS/WebSocket 连接随时被 Reset，掉线频繁
 > - 自定义域名绑定后也难逃周期性不可用
 > - **CF 官方封禁 VLESS Workers（错误代码 1101）**：Cloudflare 已开始主动检测并封禁通过 Worker 建立的 VLESS 隧道，越来越多用户遇到 1101 错误
+>
+> **如果你执意要折腾 CF 节点**，这里有一批免费 VLESS / Trojan / SS 配置，每 **20 分钟**自动刷新，复制即可导入客户端：
+> 📥 [下载配置文件](vless-configs.txt) | 📋 订阅链接（客户端一键导入）：
+> ```
+> https://raw.githubusercontent.com/violettoolssite/CFspider/main/vless-configs.txt
+> ```
+> 配置来源：[igareck/vpn-configs-for-russia](https://github.com/igareck/vpn-configs-for-russia)
 >
 > **如果你需要稳定翻墙，我们强烈推荐 [VPN Cheap](https://siusn-sisjxl.top/#/register?code=aVDxxRS0)**  
 > 填写我的邀请码可获免费 5GB/月流量，支持全平台客户端，稳定快速。[👉 点击注册](https://siusn-sisjxl.top/#/register?code=aVDxxRS0) 邀请码：**`aVDxxRS0`**
